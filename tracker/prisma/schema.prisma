@@ -1,0 +1,278 @@
+// 부정클릭 방지 + 방문자 추적 시스템
+// Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// ========================================
+// 인증 (관리자)
+// ========================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      String   @default("ADMIN") // ADMIN, VIEWER
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================
+// 랜딩 사이트 (분양현장별)
+// ========================================
+
+model LandingSite {
+  id           String   @id @default(cuid())
+  name         String   // "힐스테이트 XX"
+  slug         String   @unique // URL 식별자 "hillstate-xx"
+  subdomain    String?  @unique // 서브도메인 (optional)
+  cheongyakId  String?  // 청약홈 HOUSE_MANAGE_NO (연동용)
+  description  String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 관계
+  sessions     VisitorSession[]
+  pageViews    PageView[]
+  clickEvents  ClickEvent[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+// ========================================
+// 방문자 세션 (핑거프린트 기반)
+// ========================================
+
+model VisitorSession {
+  id               String   @id @default(cuid())
+
+  // 식별자 (4레이어)
+  fingerprint      String   // 브라우저 핑거프린트 해시
+  ipAddress        String?
+  cookieId         String?  // 쿠키 기반 ID (보조)
+
+  // 디바이스 정보
+  userAgent        String?
+  deviceType       String?  // desktop, mobile, tablet
+  browser          String?  // Chrome, Safari, Firefox...
+  browserVersion   String?
+  os               String?  // Windows, macOS, iOS, Android...
+  osVersion        String?
+  screenWidth      Int?
+  screenHeight     Int?
+
+  // 지역 정보 (IP 기반)
+  country          String?
+  countryCode      String?
+  region           String?
+  city             String?
+  isp              String?  // 통신사/ISP
+  isVpn            Boolean  @default(false)
+  isProxy          Boolean  @default(false)
+
+  // 유입 경로
+  referrer         String?  // 이전 페이지 URL
+  referrerDomain   String?  // 이전 페이지 도메인
+  utmSource        String?  // 광고 소스 (naver, google)
+  utmMedium        String?  // 매체 (cpc, organic, direct)
+  utmCampaign      String?  // 캠페인명
+  utmContent       String?  // 광고 콘텐츠
+  utmTerm          String?  // 검색 키워드
+
+  // 방문 정보
+  landingSiteId    String?
+  landingSite      LandingSite? @relation(fields: [landingSiteId], references: [id])
+  firstVisit       DateTime @default(now())
+  lastVisit        DateTime @default(now())
+  visitCount       Int      @default(1)
+  totalPageViews   Int      @default(0)
+  totalDwellTime   Int      @default(0) // 총 체류시간 (초)
+
+  // 부정클릭 관련
+  riskScore        Int      @default(0) // 0-100
+  isSuspicious     Boolean  @default(false)
+  isBlocked        Boolean  @default(false)
+  blockReason      String?
+  blockedAt        DateTime?
+
+  // 관계
+  pageViews        PageView[]
+  clickEvents      ClickEvent[]
+
+  @@index([fingerprint])
+  @@index([ipAddress])
+  @@index([landingSiteId])
+  @@index([firstVisit])
+  @@index([lastVisit])
+  @@index([riskScore])
+  @@index([isBlocked])
+  @@index([utmSource])
+}
+
+// ========================================
+// 페이지 조회 기록
+// ========================================
+
+model PageView {
+  id            String   @id @default(cuid())
+
+  // 세션 연결
+  sessionId     String
+  session       VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // 사이트 연결
+  landingSiteId String?
+  landingSite   LandingSite? @relation(fields: [landingSiteId], references: [id])
+
+  // 페이지 정보
+  path          String   // URL 경로
+  fullUrl       String?  // 전체 URL
+  title         String?  // 페이지 제목
+
+  // 시간 정보
+  enterTime     DateTime @default(now())
+  exitTime      DateTime?
+  dwellTime     Int?     // 체류시간 (초)
+
+  // 행동 데이터
+  scrollDepth   Int?     // 최대 스크롤 깊이 (%)
+  scrollEvents  Int      @default(0) // 스크롤 이벤트 수
+  mouseMovements Int     @default(0) // 마우스 이동 횟수
+  clicks        Int      @default(0) // 클릭 횟수
+
+  // 이탈 정보
+  exitType      String?  // navigate, back, close, external
+
+  @@index([sessionId])
+  @@index([landingSiteId])
+  @@index([path])
+  @@index([enterTime])
+}
+
+// ========================================
+// 클릭 이벤트 (광고/CTA 추적)
+// ========================================
+
+model ClickEvent {
+  id            String   @id @default(cuid())
+
+  // 세션 연결
+  sessionId     String
+  session       VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // 사이트 연결
+  landingSiteId String?
+  landingSite   LandingSite? @relation(fields: [landingSiteId], references: [id])
+
+  // 이벤트 정보
+  eventType     String   // ad_click, cta_click, phone_click, inquiry_submit, external_link
+  targetUrl     String?  // 클릭 대상 URL
+  targetElement String?  // 클릭 요소 (button, link, etc)
+  targetText    String?  // 클릭 요소 텍스트
+
+  // 클릭 위치
+  clickX        Int?
+  clickY        Int?
+  viewportWidth Int?
+  viewportHeight Int?
+
+  // 광고 정보 (광고 클릭인 경우)
+  adSource      String?  // naver, google, kakao
+  adCampaign    String?
+  adGroup       String?
+  adKeyword     String?
+  adCreative    String?
+
+  // 컨텍스트
+  pageUrl       String?  // 클릭 발생 페이지
+  timestamp     DateTime @default(now())
+
+  // 클릭 전 행동 (부정클릭 판단용)
+  dwellTimeBeforeClick Int? // 클릭 전 체류시간 (초)
+  scrollDepthBeforeClick Int? // 클릭 전 스크롤 깊이 (%)
+  mouseMovementsBeforeClick Int? // 클릭 전 마우스 움직임
+
+  // 부정클릭 판정
+  isFraud       Boolean  @default(false)
+  fraudReason   String?
+  fraudScore    Int      @default(0) // 0-100
+
+  @@index([sessionId])
+  @@index([landingSiteId])
+  @@index([eventType])
+  @@index([timestamp])
+  @@index([isFraud])
+  @@index([adSource])
+}
+
+// ========================================
+// 블랙리스트 (영구 차단)
+// ========================================
+
+model Blacklist {
+  id          String   @id @default(cuid())
+
+  // 식별자 (둘 중 하나 이상)
+  fingerprint String?  @unique
+  ipAddress   String?
+
+  // 차단 정보
+  reason      String
+  evidence    String?  // JSON: 부정클릭 증거 데이터
+
+  // 메타
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime? // null이면 영구 차단
+
+  @@index([fingerprint])
+  @@index([ipAddress])
+}
+
+// ========================================
+// 일일 통계 (집계 테이블)
+// ========================================
+
+model DailyStats {
+  id              String   @id @default(cuid())
+  date            DateTime
+  landingSiteId   String?
+
+  // 방문 통계
+  uniqueVisitors  Int      @default(0)
+  totalPageViews  Int      @default(0)
+  totalSessions   Int      @default(0)
+  avgDwellTime    Int      @default(0) // 초
+  bounceRate      Float    @default(0) // %
+
+  // 유입 경로별
+  directVisits    Int      @default(0)
+  naverAdVisits   Int      @default(0)
+  googleAdVisits  Int      @default(0)
+  organicVisits   Int      @default(0)
+  otherVisits     Int      @default(0)
+
+  // 부정클릭 통계
+  suspiciousClicks Int     @default(0)
+  blockedClicks    Int     @default(0)
+  fraudScore       Float   @default(0) // 평균
+
+  // 디바이스별
+  desktopVisits   Int      @default(0)
+  mobileVisits    Int      @default(0)
+  tabletVisits    Int      @default(0)
+
+  @@unique([date, landingSiteId])
+  @@index([date])
+  @@index([landingSiteId])
+}

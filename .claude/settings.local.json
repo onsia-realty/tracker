@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma generate)",
+      "Bash(npx prisma db push)",
+      "Bash(pnpm run dev)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(vercel logout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(vercel:*)",
+      "Bash(pnpm install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

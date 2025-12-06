@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "Bash(pnpm run dev:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git fetch:*)",
+      "WebFetch(domain:www.onsia.city)",
+      "WebFetch(domain:tracker.onsia.city)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_snapshot",
+      "Bash(npm run build:*)",
+      "Bash(pnpm run build:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npm run:*)",
+      "Bash(pnpm run:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx tsx:*)",
+      "WebSearch",
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)",
+      "Bash(rm:*)",
+      "Bash(node -e:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
