@@ -29,8 +29,12 @@ interface RealtimeData {
   recentVisitors: Array<{
     id: string;
     deviceType: string;
+    deviceVendor: string | null;
+    deviceModel: string | null;
     browser: string;
+    browserVersion: string | null;
     os: string;
+    osVersion: string | null;
     city: string;
     country: string;
     referrer: string;
@@ -38,6 +42,10 @@ interface RealtimeData {
     lastVisit: string;
     riskScore: number;
     isBlocked: boolean;
+    landingSite: {
+      name: string;
+      slug: string;
+    } | null;
   }>;
 }
 
@@ -45,17 +53,34 @@ interface RealtimeData {
 // 메인 컴포넌트
 // ===========================================
 
+interface LandingSite {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export default function VisitorsPage() {
   const [traffic, setTraffic] = useState<TrafficStats | null>(null);
   const [realtime, setRealtime] = useState<RealtimeData | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [loading, setLoading] = useState(true);
+  const [sites, setSites] = useState<LandingSite[]>([]);
+  const [selectedSite, setSelectedSite] = useState<string>('all');
+
+  // 사이트 목록 로드
+  useEffect(() => {
+    fetch('/api/admin/sites')
+      .then(res => res.json())
+      .then(data => setSites(data))
+      .catch(console.error);
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
+      const siteParam = selectedSite !== 'all' ? `&site=${selectedSite}` : '';
       const [trafficRes, realtimeRes] = await Promise.all([
-        fetch(`/api/analytics/stats?period=${period}&type=traffic`),
-        fetch(`/api/analytics/stats?type=realtime`),
+        fetch(`/api/analytics/stats?period=${period}&type=traffic${siteParam}`),
+        fetch(`/api/analytics/stats?type=realtime${siteParam}`),
       ]);
 
       if (trafficRes.ok) setTraffic(await trafficRes.json());
@@ -65,7 +90,7 @@ export default function VisitorsPage() {
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [period, selectedSite]);
 
   useEffect(() => {
     fetchData();
@@ -89,20 +114,37 @@ export default function VisitorsPage() {
           <h1 className="text-2xl font-bold text-gray-900">방문자 분석</h1>
           <p className="text-gray-500 mt-1">실시간 방문자 현황 및 트래픽 분석</p>
         </div>
-        <div className="flex gap-2">
-          {(['today', 'week', 'month'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                period === p
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {p === 'today' ? '오늘' : p === 'week' ? '이번 주' : '이번 달'}
-            </button>
-          ))}
+        <div className="flex gap-3 items-center">
+          {/* 사이트 선택 */}
+          <select
+            value={selectedSite}
+            onChange={(e) => setSelectedSite(e.target.value)}
+            className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 transition"
+          >
+            <option value="all">전체 사이트</option>
+            {sites.map((site) => (
+              <option key={site.id} value={site.slug}>
+                {site.name}
+              </option>
+            ))}
+          </select>
+
+          {/* 기간 선택 */}
+          <div className="flex gap-2">
+            {(['today', 'week', 'month'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  period === p
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {p === 'today' ? '오늘' : p === 'week' ? '이번 주' : '이번 달'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -273,8 +315,8 @@ export default function VisitorsPage() {
                 <thead>
                   <tr className="text-left text-sm text-gray-500 border-b">
                     <th className="pb-3 font-medium">방문 시간</th>
-                    <th className="pb-3 font-medium">디바이스</th>
-                    <th className="pb-3 font-medium">브라우저</th>
+                    <th className="pb-3 font-medium">사이트</th>
+                    <th className="pb-3 font-medium">기기 정보</th>
                     <th className="pb-3 font-medium">지역</th>
                     <th className="pb-3 font-medium">유입 경로</th>
                     <th className="pb-3 font-medium">상태</th>
@@ -289,11 +331,24 @@ export default function VisitorsPage() {
                           minute: '2-digit',
                         })}
                       </td>
-                      <td className="py-3 text-gray-700 capitalize">
-                        {visitor.deviceType || '-'}
+                      <td className="py-3">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {visitor.landingSite?.name || '미분류'}
+                        </span>
                       </td>
-                      <td className="py-3 text-gray-700">
-                        {visitor.browser || '-'}
+                      <td className="py-3">
+                        <div className="flex flex-col">
+                          <span className="text-gray-900 font-medium">
+                            {formatDeviceName(visitor)}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {visitor.browser || 'Unknown'}
+                            {visitor.browserVersion && ` ${visitor.browserVersion.split('.')[0]}`}
+                            {' · '}
+                            {visitor.os || 'Unknown'}
+                            {visitor.osVersion && ` ${visitor.osVersion.split('.')[0]}`}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-3 text-gray-700">
                         {visitor.city || visitor.country || '-'}
@@ -353,4 +408,24 @@ function getSourceLabel(source: string | null): string {
     direct: '직접 방문',
   };
   return labels[source.toLowerCase()] || source;
+}
+
+function formatDeviceName(visitor: RealtimeData['recentVisitors'][0]): string {
+  // 기종 정보가 있으면 표시
+  if (visitor.deviceModel && visitor.deviceModel !== 'Unknown') {
+    // Apple 기기는 벤더 생략
+    if (visitor.deviceVendor === 'Apple') {
+      return visitor.deviceModel; // "iPhone 14 Pro"
+    }
+    // 기타 기기는 벤더 + 모델
+    return `${visitor.deviceVendor || ''} ${visitor.deviceModel}`.trim();
+  }
+
+  // 기종 정보가 없으면 디바이스 타입으로 표시
+  const deviceIcons: Record<string, string> = {
+    mobile: '📱 Mobile',
+    tablet: '📱 Tablet',
+    desktop: '🖥️ Desktop',
+  };
+  return deviceIcons[visitor.deviceType] || visitor.deviceType;
 }

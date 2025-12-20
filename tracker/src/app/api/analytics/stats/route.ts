@@ -133,8 +133,12 @@ async function getRealtimeStats(landingSiteId: string | null) {
     select: {
       id: true,
       deviceType: true,
+      deviceVendor: true,
+      deviceModel: true,
       browser: true,
+      browserVersion: true,
       os: true,
+      osVersion: true,
       city: true,
       country: true,
       referrer: true,
@@ -142,6 +146,12 @@ async function getRealtimeStats(landingSiteId: string | null) {
       lastVisit: true,
       riskScore: true,
       isBlocked: true,
+      landingSite: {
+        select: {
+          name: true,
+          slug: true,
+        },
+      },
     },
   });
 

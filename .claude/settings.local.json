@@ -12,7 +12,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(vercel:*)",
-      "Bash(pnpm install:*)"
+      "Bash(pnpm install:*)",
+      "Bash(git remote add:*)",
+      "Bash(npx tsx:*)"
     ],
     "deny": [],
     "ask": []
