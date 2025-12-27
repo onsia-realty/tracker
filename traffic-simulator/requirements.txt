@@ -1,0 +1,15 @@
+# 웹 자동화
+playwright==1.42.0
+
+# HTTP 요청
+requests==2.31.0
+
+# 웹 대시보드
+flask==3.0.0
+flask-cors==4.0.0
+
+# 환경 변수
+python-dotenv==1.0.0
+
+# Android Debug Bridge (자동 설치되지 않음, 수동 설치 필요)
+# ADB 설치: https://developer.android.com/studio/releases/platform-tools

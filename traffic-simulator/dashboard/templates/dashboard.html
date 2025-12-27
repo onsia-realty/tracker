@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>트래픽 시뮬레이터 대시보드</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 32px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .stat-card h3 {
+            margin: 0 0 15px 0;
+            color: #7f8c8d;
+            font-size: 14px;
+            font-weight: normal;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #27ae60;
+        }
+
+        .stat-card .sub-value {
+            font-size: 14px;
+            color: #95a5a6;
+            margin-top: 10px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .chart-container h2 {
+            margin: 0 0 20px 0;
+            color: #2c3e50;
+            font-size: 22px;
+        }
+
+        table {
+            width: 100%;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        th {
+            background: #34495e;
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-success {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .status-failed {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .status-blocked {
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-mobile {
+            background: #3498db;
+            color: white;
+        }
+
+        .badge-desktop {
+            background: #9b59b6;
+            color: white;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #95a5a6;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #95a5a6;
+            font-style: italic;
+        }
+
+        .update-time {
+            text-align: center;
+            color: #95a5a6;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 트래픽 시뮬레이터 대시보드</h1>
+
+        <!-- 통계 카드 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>오늘 총 세션</h3>
+                <div class="value" id="today-sessions">-</div>
+                <div class="sub-value">이번 주: <span id="week-sessions">-</span></div>
+            </div>
+            <div class="stat-card">
+                <h3>성공률</h3>
+                <div class="value" id="success-rate">-</div>
+                <div class="sub-value">성공: <span id="success-count">-</span> | 실패: <span id="failed-count">-</span></div>
+            </div>
+            <div class="stat-card">
+                <h3>평균 체류시간</h3>
+                <div class="value" id="avg-dwell">-</div>
+                <div class="sub-value">평균 스크롤: <span id="avg-scroll">-</span></div>
+            </div>
+            <div class="stat-card">
+                <h3>평균 부정클릭 점수</h3>
+                <div class="value" id="avg-fraud">-</div>
+                <div class="sub-value">차단 횟수: <span id="blocked-count">-</span></div>
+            </div>
+        </div>
+
+        <!-- 검색 순위 차트 -->
+        <div class="chart-container">
+            <h2>📊 검색 순위 변동 추이</h2>
+            <canvas id="rankChart"></canvas>
+        </div>
+
+        <!-- 최근 세션 로그 -->
+        <div class="chart-container">
+            <h2>📋 최근 세션 로그</h2>
+            <table id="sessions-table">
+                <thead>
+                    <tr>
+                        <th>시간</th>
+                        <th>디바이스</th>
+                        <th>상태</th>
+                        <th>체류시간</th>
+                        <th>부정클릭점수</th>
+                        <th>유입경로</th>
+                        <th>IP 주소</th>
+                    </tr>
+                </thead>
+                <tbody id="sessions-body">
+                    <tr>
+                        <td colspan="7" class="loading">데이터 로딩 중...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="update-time">
+            마지막 업데이트: <span id="last-update">-</span> | 30초마다 자동 업데이트
+        </div>
+    </div>
+
+    <script>
+        let rankChart = null;
+
+        // 데이터 로드 및 업데이트
+        async function updateDashboard() {
+            try {
+                // 통계 로드
+                const statsRes = await fetch('/api/stats');
+                const stats = await statsRes.json();
+
+                // 오늘 통계
+                document.getElementById('today-sessions').textContent = stats.today.total_sessions;
+                document.getElementById('success-rate').textContent = stats.today.success_rate;
+                document.getElementById('avg-dwell').textContent = stats.today.avg_dwell_time;
+                document.getElementById('avg-fraud').textContent = stats.today.avg_fraud_score;
+
+                // 서브 값
+                document.getElementById('week-sessions').textContent = stats.week.total_sessions;
+                document.getElementById('success-count').textContent = stats.today.success_count;
+                document.getElementById('failed-count').textContent = stats.today.failed_count;
+                document.getElementById('avg-scroll').textContent = stats.today.avg_scroll_depth;
+                document.getElementById('blocked-count').textContent = stats.today.blocked_count;
+
+                // 순위 차트 로드
+                const rankRes = await fetch('/api/rankings');
+                const rankings = await rankRes.json();
+
+                // 순위 차트 그리기
+                const ctx = document.getElementById('rankChart').getContext('2d');
+
+                // 기존 차트 제거
+                if (rankChart) {
+                    rankChart.destroy();
+                }
+
+                // 첫 번째 키워드 데이터 사용 (용인 아파트)
+                const firstKeyword = rankings[0];
+
+                rankChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: firstKeyword.naver.map(r => r[0]),
+                        datasets: [
+                            {
+                                label: '네이버 순위 (용인 아파트)',
+                                data: firstKeyword.naver.map(r => r[1]),
+                                borderColor: '#27ae60',
+                                backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                                tension: 0.3,
+                                fill: true
+                            },
+                            {
+                                label: '구글 순위 (용인 아파트)',
+                                data: firstKeyword.google.map(r => r[1]),
+                                borderColor: '#e74c3c',
+                                backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                                tension: 0.3,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                reverse: true,  // 순위는 낮을수록 좋음
+                                beginAtZero: false,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // 최근 세션 로드
+                const sessionsRes = await fetch('/api/sessions/recent');
+                const sessions = await sessionsRes.json();
+
+                const tbody = document.getElementById('sessions-body');
+
+                if (sessions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="no-data">아직 세션 데이터가 없습니다</td></tr>';
+                } else {
+                    tbody.innerHTML = sessions.map(s => `
+                        <tr>
+                            <td>${new Date(s.timestamp).toLocaleString('ko-KR')}</td>
+                            <td>
+                                <span class="badge badge-${s.device_type}">${s.device_type === 'mobile' ? '모바일' : '데스크톱'}</span>
+                                ${s.device_name}
+                            </td>
+                            <td class="status-${s.status}">${s.status.toUpperCase()}</td>
+                            <td>${s.dwell_time}초</td>
+                            <td>${s.fraud_score}점</td>
+                            <td>${s.referrer || '-'}</td>
+                            <td>${s.ip || '-'}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                // 업데이트 시간
+                document.getElementById('last-update').textContent = new Date().toLocaleTimeString('ko-KR');
+
+            } catch (error) {
+                console.error('데이터 로드 오류:', error);
+            }
+        }
+
+        // 초기 로드
+        updateDashboard();
+
+        // 30초마다 자동 업데이트
+        setInterval(updateDashboard, 30000);
+    </script>
+</body>
+</html>
