@@ -8,6 +8,8 @@
  * 4. 행동 패턴 (부정클릭 탐지용)
  */
 
+import * as UAParser from 'ua-parser-js';
+
 // ===========================================
 // 타입 정의
 // ===========================================
@@ -48,6 +50,8 @@ export interface FingerprintData {
 
 export interface DeviceInfo {
   deviceType: 'desktop' | 'mobile' | 'tablet';
+  deviceVendor: string | null; // Apple, Samsung, Google, Xiaomi...
+  deviceModel: string | null;  // iPhone 14 Pro, Galaxy S23, Pixel 7...
   browser: string;
   browserVersion: string;
   os: string;
@@ -83,65 +87,69 @@ function simpleHash(str: string): string {
 // ===========================================
 
 // getDeviceInfo는 detectDevice의 alias
-export const getDeviceInfo = (): DeviceInfo => detectDevice();
+export const getDeviceInfo = (): Promise<DeviceInfo> => detectDevice();
 
-export function detectDevice(): DeviceInfo {
+export async function detectDevice(): Promise<DeviceInfo> {
   const ua = navigator.userAgent;
+
+  // 1. 먼저 User-Agent Client Hints 시도 (최신 Chrome/Edge)
+  let deviceVendor: string | null = null;
+  let deviceModel: string | null = null;
+
+  if ('userAgentData' in navigator) {
+    try {
+      const uaData = (navigator as any).userAgentData;
+      const highEntropy = await uaData.getHighEntropyValues([
+        'model',
+        'platform',
+        'platformVersion'
+      ]);
+
+      if (highEntropy.model && highEntropy.model !== '') {
+        deviceModel = highEntropy.model;
+        // 벤더 추정 (플랫폼 기반)
+        if (highEntropy.platform === 'Android') {
+          // 안드로이드는 모델명으로 벤더 추정
+          if (deviceModel.toLowerCase().includes('sm-')) deviceVendor = 'Samsung';
+          else if (deviceModel.toLowerCase().includes('pixel')) deviceVendor = 'Google';
+          else deviceVendor = 'Android';
+        }
+      }
+    } catch (err) {
+      console.warn('Client Hints failed:', err);
+    }
+  }
+
+  // 2. UAParser 폴백 (모든 브라우저 지원)
+  const parser = new UAParser.UAParser(ua);
+  const result = parser.getResult();
+
+  // Client Hints로 못 가져왔으면 UAParser 결과 사용
+  if (!deviceVendor) deviceVendor = result.device.vendor || null;
+  if (!deviceModel) deviceModel = result.device.model || null;
 
   // 디바이스 타입 감지
   let deviceType: 'desktop' | 'mobile' | 'tablet' = 'desktop';
-  if (/tablet|ipad|playbook|silk/i.test(ua)) {
+  if (result.device.type === 'tablet') {
+    deviceType = 'tablet';
+  } else if (result.device.type === 'mobile') {
+    deviceType = 'mobile';
+  } else if (/tablet|ipad|playbook|silk/i.test(ua)) {
     deviceType = 'tablet';
   } else if (/mobile|iphone|ipod|android|blackberry|opera mini|iemobile/i.test(ua)) {
     deviceType = 'mobile';
   }
 
-  // 브라우저 감지
-  let browser = 'Unknown';
-  let browserVersion = '';
-
-  if (/edg/i.test(ua)) {
-    browser = 'Edge';
-    browserVersion = ua.match(/edg\/(\d+)/i)?.[1] || '';
-  } else if (/chrome/i.test(ua) && !/edg/i.test(ua)) {
-    browser = 'Chrome';
-    browserVersion = ua.match(/chrome\/(\d+)/i)?.[1] || '';
-  } else if (/firefox/i.test(ua)) {
-    browser = 'Firefox';
-    browserVersion = ua.match(/firefox\/(\d+)/i)?.[1] || '';
-  } else if (/safari/i.test(ua) && !/chrome/i.test(ua)) {
-    browser = 'Safari';
-    browserVersion = ua.match(/version\/(\d+)/i)?.[1] || '';
-  } else if (/msie|trident/i.test(ua)) {
-    browser = 'IE';
-    browserVersion = ua.match(/(?:msie |rv:)(\d+)/i)?.[1] || '';
-  }
-
-  // OS 감지
-  let os = 'Unknown';
-  let osVersion = '';
-
-  if (/windows/i.test(ua)) {
-    os = 'Windows';
-    if (/windows nt 10/i.test(ua)) osVersion = '10';
-    else if (/windows nt 6.3/i.test(ua)) osVersion = '8.1';
-    else if (/windows nt 6.2/i.test(ua)) osVersion = '8';
-    else if (/windows nt 6.1/i.test(ua)) osVersion = '7';
-  } else if (/macintosh|mac os x/i.test(ua)) {
-    os = 'macOS';
-    osVersion = ua.match(/mac os x (\d+[._]\d+)/i)?.[1]?.replace('_', '.') || '';
-  } else if (/android/i.test(ua)) {
-    os = 'Android';
-    osVersion = ua.match(/android (\d+\.?\d*)/i)?.[1] || '';
-  } else if (/iphone|ipad|ipod/i.test(ua)) {
-    os = 'iOS';
-    osVersion = ua.match(/os (\d+[._]\d+)/i)?.[1]?.replace('_', '.') || '';
-  } else if (/linux/i.test(ua)) {
-    os = 'Linux';
-  }
+  // 브라우저/OS 감지
+  const browser = result.browser.name || 'Unknown';
+  const browserVersion = result.browser.version || '';
+  const os = result.os.name || 'Unknown';
+  const osVersion = result.os.version || '';
 
   return {
     deviceType,
+    deviceVendor,
+    deviceModel,
     browser,
     browserVersion,
     os,
@@ -310,7 +318,7 @@ function getFontsFingerprint(): string {
 // ===========================================
 
 export async function generateFingerprint(): Promise<FingerprintData> {
-  const device = detectDevice();
+  const device = await detectDevice();
 
   // 각종 핑거프린트 수집
   const canvasRaw = getCanvasFingerprint();

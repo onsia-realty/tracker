@@ -125,7 +125,7 @@ export default function AnalyticsTracker({ config }: AnalyticsTrackerProps) {
 
     // 핑거프린트 생성
     const fingerprint = await generateFingerprint();
-    const deviceInfo = getDeviceInfo();
+    const deviceInfo = await getDeviceInfo();
     const utmParams = parseUTMParams();
 
     // 쿠키 ID
@@ -139,7 +139,16 @@ export default function AnalyticsTracker({ config }: AnalyticsTrackerProps) {
     const result = await apiCall('/session', 'POST', {
       fingerprint: fingerprint.hash,
       cookieId,
-      ...deviceInfo,
+      deviceType: deviceInfo.deviceType,
+      deviceVendor: deviceInfo.deviceVendor,
+      deviceModel: deviceInfo.deviceModel,
+      browser: deviceInfo.browser,
+      browserVersion: deviceInfo.browserVersion,
+      os: deviceInfo.os,
+      osVersion: deviceInfo.osVersion,
+      screenWidth: deviceInfo.screenWidth,
+      screenHeight: deviceInfo.screenHeight,
+      userAgent: deviceInfo.userAgent,
       referrer: document.referrer || null,
       referrerDomain: document.referrer
         ? new URL(document.referrer).hostname

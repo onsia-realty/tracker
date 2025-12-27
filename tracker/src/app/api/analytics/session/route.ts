@@ -22,6 +22,8 @@ interface SessionRequest {
 
   // 디바이스 정보
   deviceType: string;
+  deviceVendor?: string | null;
+  deviceModel?: string | null;
   browser: string;
   browserVersion: string;
   os: string;
@@ -141,6 +143,8 @@ export async function POST(request: NextRequest) {
           // 디바이스 정보
           userAgent: body.userAgent,
           deviceType: body.deviceType,
+          deviceVendor: body.deviceVendor,
+          deviceModel: body.deviceModel,
           browser: body.browser,
           browserVersion: body.browserVersion,
           os: body.os,

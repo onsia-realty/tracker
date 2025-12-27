@@ -14,7 +14,14 @@
       "Bash(vercel:*)",
       "Bash(pnpm install:*)",
       "Bash(git remote add:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(pnpm add:*)",
+      "Bash(npx tsc:*)",
+      "Bash(cat:*)",
+      "Bash(pnpm run build)",
+      "Bash(curl:*)",
+      "mcp__playwright__browser_run_code",
+      "WebFetch(domain:a1.smlog.co.kr)"
     ],
     "deny": [],
     "ask": []
