@@ -50,10 +50,29 @@ interface ReferrerData {
   }>;
 }
 
+interface PageData {
+  landingPages: Array<{
+    page_path: string;
+    page_name: string;
+    visit_count: number;
+    avg_dwell_time: number;
+    avg_fraud_score: number;
+    success_count: number;
+    success_rate: number;
+  }>;
+  allPages: Array<{
+    page_path: string;
+    page_name: string;
+    visit_count: number;
+    percentage: number;
+  }>;
+}
+
 export default function TrafficDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [referrerData, setReferrerData] = useState<ReferrerData | null>(null);
+  const [pageData, setPageData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
@@ -72,6 +91,11 @@ export default function TrafficDashboard() {
       const referrerRes = await fetch('/api/traffic/referrers');
       const referrerData = await referrerRes.json();
       setReferrerData(referrerData);
+
+      // 페이지별 데이터 가져오기
+      const pageRes = await fetch('/api/traffic/pages');
+      const pageData = await pageRes.json();
+      setPageData(pageData);
 
       setLoading(false);
     } catch (error) {
@@ -217,6 +241,103 @@ export default function TrafficDashboard() {
             </table>
           </div>
         </div>
+
+        {/* 페이지별 방문 통계 */}
+        {pageData && (
+          <>
+            {/* 전체 페이지 방문 통계 */}
+            <div className="bg-white rounded-lg shadow-md p-6 mt-8">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">📊 페이지별 총 방문 횟수</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-800 text-white">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">순위</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">페이지</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">방문 횟수</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">비율</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {pageData.allPages.map((page, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                          #{idx + 1}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-semibold text-blue-600">{page.page_name}</div>
+                          <div className="text-xs text-gray-500">{page.page_path}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <span className="font-bold">{page.visit_count}회</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 mr-2">
+                              <div
+                                className="bg-blue-600 h-2.5 rounded-full"
+                                style={{ width: `${page.percentage}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-sm font-semibold text-gray-900 min-w-[50px]">
+                              {page.percentage}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 첫 진입 페이지 통계 */}
+            {pageData.landingPages.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md p-6 mt-8">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">🚪 첫 진입 페이지 통계</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-800 text-white">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">페이지</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">진입 횟수</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">성공률</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">평균 체류시간</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">평균 부정점수</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {pageData.landingPages.map((page, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-blue-600">{page.page_name}</div>
+                            <div className="text-xs text-gray-500">{page.page_path}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <span className="font-bold">{page.visit_count}회</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`text-sm font-semibold ${
+                              page.success_rate >= 70 ? 'text-green-600' : 'text-orange-600'
+                            }`}>
+                              {page.success_rate}%
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {page.avg_dwell_time}초
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {page.avg_fraud_score}점
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         {/* 유입경로 분석 */}
         {referrerData && (

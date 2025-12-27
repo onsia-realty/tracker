@@ -51,6 +51,10 @@ class SessionLogger:
                 mouse_movements INTEGER,
                 clicks INTEGER,
 
+                -- 페이지별 방문 기록
+                visited_pages TEXT,  -- JSON 배열: ["/", "/premium", "/location"]
+                landing_page TEXT,   -- 첫 진입 페이지
+
                 -- Referrer 정보
                 referrer_type TEXT,  -- 'naver', 'google', 'social', 'direct'
                 referrer_keyword TEXT,
@@ -87,10 +91,11 @@ class SessionLogger:
                 status, error_message,
                 dwell_time_seconds, pages_visited, scroll_depth_percent,
                 mouse_movements, clicks,
+                visited_pages, landing_page,
                 referrer_type, referrer_keyword,
                 fraud_score, is_blocked, block_reason,
                 next_run_delay_seconds
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             session_data.get('proxy_ip'),
             session_data.get('proxy_country'),
@@ -107,6 +112,8 @@ class SessionLogger:
             session_data.get('scroll_depth_percent'),
             session_data.get('mouse_movements'),
             session_data.get('clicks'),
+            session_data.get('visited_pages'),  # JSON 배열
+            session_data.get('landing_page'),   # 첫 진입 페이지
             session_data.get('referrer_type'),
             session_data.get('referrer_keyword'),
             session_data.get('fraud_score', 0),

@@ -113,10 +113,16 @@ class TrafficSimulator:
                 scroll_depth = await self.behavior.human_scroll(page)
                 session_data['scroll_depth_percent'] = scroll_depth
 
-                # 무작위 클릭
-                clicks = await self.behavior.random_page_interaction(page)
-                session_data['clicks'] = clicks
-                session_data['pages_visited'] = clicks + 1  # 메인 페이지 + 클릭한 페이지
+                # 내부 페이지 방문 (페이지별 통계 기록)
+                base_url = f"https://{self.referrer.target_url}"
+                visited_pages = await self.behavior.visit_internal_pages(page, base_url)
+
+                # JSON 형식으로 저장
+                import json
+                session_data['visited_pages'] = json.dumps(visited_pages, ensure_ascii=False)
+                session_data['landing_page'] = visited_pages[0] if visited_pages else '/'
+                session_data['pages_visited'] = len(visited_pages)
+                session_data['clicks'] = len(visited_pages) - 1  # 메인 페이지 제외
 
                 # 체류 시간 (30-120초)
                 dwell_time = self.behavior.get_random_dwell_time(30, 120)

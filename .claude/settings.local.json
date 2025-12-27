@@ -22,7 +22,14 @@
       "Bash(curl:*)",
       "mcp__playwright__browser_run_code",
       "WebFetch(domain:a1.smlog.co.kr)",
-      "mcp__playwright__browser_wait_for"
+      "mcp__playwright__browser_wait_for",
+      "Bash(taskkill:*)",
+      "Bash(pnpm approve-builds:*)",
+      "Bash(if [ -f \"../traffic-simulator/logs/sessions.db\" ])",
+      "Bash(then echo \"DB 파일 존재\")",
+      "Bash(sqlite3:*)",
+      "Bash(else echo \"DB 파일 없음\")",
+      "Bash(fi)"
     ],
     "deny": [],
     "ask": []

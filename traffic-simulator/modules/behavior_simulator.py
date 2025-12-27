@@ -207,6 +207,69 @@ class BehaviorSimulator:
 
         return clicks
 
+    async def visit_internal_pages(self, page, base_url):
+        """
+        내부 페이지 무작위 방문 (페이지별 통계용)
+
+        Args:
+            page: Playwright 페이지
+            base_url: 기본 URL (예: 'https://yongin-honorsville.vercel.app')
+
+        Returns:
+            방문한 페이지 경로 리스트
+        """
+        # 방문 가능한 내부 페이지 목록
+        available_pages = [
+            '/',                # 메인 페이지
+            '/business',        # 사업 안내
+            '/premium',         # 프리미엄
+            '/location',        # 입지 환경
+            '/site-plan',       # 단지 배치도
+            '/floor-plan',      # 평면도
+            '/interior',        # 특화 설계
+            '/community',       # 커뮤니티
+            '/contact'          # 분양 문의
+        ]
+
+        visited_pages = ['/']  # 메인 페이지는 이미 방문한 것으로 간주
+
+        try:
+            # 0-3개의 추가 페이지 방문
+            num_pages = random.randint(0, 3)
+
+            if num_pages == 0:
+                print(f"  📄 추가 페이지 방문 없음 (메인만)")
+                return visited_pages
+
+            print(f"  📄 내부 페이지 방문: {num_pages}개")
+
+            # 메인 페이지 제외하고 무작위 선택
+            pages_to_visit = random.sample(available_pages[1:], min(num_pages, len(available_pages) - 1))
+
+            for i, page_path in enumerate(pages_to_visit, 1):
+                full_url = base_url + page_path
+
+                print(f"    {i}/{num_pages}: {page_path}")
+
+                # 페이지 이동
+                await page.goto(full_url, wait_until='networkidle', timeout=30000)
+                visited_pages.append(page_path)
+
+                # 페이지 로드 후 대기
+                await asyncio.sleep(random.uniform(3, 6))
+
+                # 간단한 스크롤
+                scroll_amount = random.randint(500, 1500)
+                await page.mouse.wheel(0, scroll_amount)
+                await asyncio.sleep(random.uniform(2, 4))
+
+            print(f"  ✅ 페이지 방문 완료: 총 {len(visited_pages)}개")
+
+        except Exception as e:
+            print(f"  ⚠️ 페이지 방문 오류: {e}")
+
+        return visited_pages
+
     def get_random_dwell_time(self, min_seconds=30, max_seconds=120):
         """
         무작위 체류 시간 반환 (초)
