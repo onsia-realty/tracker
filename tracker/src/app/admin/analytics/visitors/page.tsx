@@ -28,6 +28,7 @@ interface RealtimeData {
   };
   recentVisitors: Array<{
     id: string;
+    ipAddress: string | null;
     deviceType: string;
     deviceVendor: string | null;
     deviceModel: string | null;
@@ -316,6 +317,7 @@ export default function VisitorsPage() {
                   <tr className="text-left text-sm text-gray-500 border-b">
                     <th className="pb-3 font-medium">방문 시간</th>
                     <th className="pb-3 font-medium">사이트</th>
+                    <th className="pb-3 font-medium">IP 주소</th>
                     <th className="pb-3 font-medium">기기 정보</th>
                     <th className="pb-3 font-medium">지역</th>
                     <th className="pb-3 font-medium">유입 경로</th>
@@ -335,6 +337,9 @@ export default function VisitorsPage() {
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           {visitor.landingSite?.name || '미분류'}
                         </span>
+                      </td>
+                      <td className="py-3 text-gray-600 font-mono text-xs">
+                        {visitor.ipAddress || '-'}
                       </td>
                       <td className="py-3">
                         <div className="flex flex-col">

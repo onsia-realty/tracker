@@ -59,7 +59,7 @@ export async function getGeoIPFromIpApi(ip: string): Promise<GeoIPInfo | null> {
     }
 
     const response = await fetch(
-      `http://ip-api.com/json/${ip}?fields=status,country,countryCode,region,regionName,city,isp,org,as,hosting,proxy,query`,
+      `http://ip-api.com/json/${ip}?fields=status,country,countryCode,region,regionName,city,isp,org,as,hosting,proxy,query&lang=ko`,
       { next: { revalidate: 86400 } } // 24시간 캐시
     );
 

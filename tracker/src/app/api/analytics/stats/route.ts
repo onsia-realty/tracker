@@ -132,6 +132,7 @@ async function getRealtimeStats(landingSiteId: string | null) {
     take: 10,
     select: {
       id: true,
+      ipAddress: true,
       deviceType: true,
       deviceVendor: true,
       deviceModel: true,
