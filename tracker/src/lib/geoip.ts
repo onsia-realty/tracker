@@ -47,10 +47,10 @@ export async function getGeoIPFromIpApi(ip: string): Promise<GeoIPInfo | null> {
     if (isLocalIP(ip)) {
       return {
         ip,
-        country: 'Korea',
+        country: '대한민국',
         countryCode: 'KR',
-        region: null,
-        city: null,
+        region: '경기도',
+        city: '로컬',
         isp: null,
         isVpn: false,
         isProxy: false,
@@ -121,10 +121,10 @@ export async function getGeoIPFromIpInfo(ip: string): Promise<GeoIPInfo | null> 
     if (isLocalIP(ip)) {
       return {
         ip,
-        country: 'Korea',
+        country: '대한민국',
         countryCode: 'KR',
-        region: null,
-        city: null,
+        region: '경기도',
+        city: '로컬',
         isp: null,
         isVpn: false,
         isProxy: false,

@@ -108,14 +108,14 @@ export default function VisitorsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-0">
       {/* 헤더 */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">방문자 분석</h1>
-          <p className="text-gray-500 mt-1">실시간 방문자 현황 및 트래픽 분석</p>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">방문자 분석</h1>
+          <p className="text-gray-500 mt-1 text-sm md:text-base">실시간 방문자 현황 및 트래픽 분석</p>
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           {/* 사이트 선택 */}
           <select
             value={selectedSite}
@@ -136,10 +136,10 @@ export default function VisitorsPage() {
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition ${
                   period === p
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-300'
                 }`}
               >
                 {p === 'today' ? '오늘' : p === 'week' ? '이번 주' : '이번 달'}
@@ -152,34 +152,34 @@ export default function VisitorsPage() {
       {/* 실시간 + 요약 */}
       {traffic && realtime && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 md:p-6 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-100 text-sm">실시간 방문자</p>
-                  <p className="text-3xl font-bold mt-1">
+                  <p className="text-blue-100 text-xs md:text-sm">실시간 방문자</p>
+                  <p className="text-2xl md:text-3xl font-bold mt-1">
                     {realtime.realtime.visitors}
                   </p>
                 </div>
                 <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <p className="text-sm text-gray-500">총 방문자</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">
+            <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
+              <p className="text-xs md:text-sm text-gray-500">총 방문자</p>
+              <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-1">
                 {traffic.summary.totalVisitors.toLocaleString()}
               </p>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-xs md:text-sm text-gray-500 mt-1">
                 신규 {traffic.summary.newVisitors.toLocaleString()} / 재방문{' '}
                 {traffic.summary.returningVisitors.toLocaleString()}
               </p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <p className="text-sm text-gray-500">페이지뷰</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">
+            <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
+              <p className="text-xs md:text-sm text-gray-500">페이지뷰</p>
+              <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-1">
                 {traffic.summary.totalPageViews.toLocaleString()}
               </p>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-xs md:text-sm text-gray-500 mt-1">
                 평균{' '}
                 {(
                   traffic.summary.totalPageViews / traffic.summary.totalVisitors || 0
@@ -187,22 +187,22 @@ export default function VisitorsPage() {
                 페이지/방문
               </p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <p className="text-sm text-gray-500">평균 체류시간</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">
+            <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
+              <p className="text-xs md:text-sm text-gray-500">평균 체류시간</p>
+              <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-1">
                 {formatTime(traffic.summary.avgDwellTime)}
               </p>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-xs md:text-sm text-gray-500 mt-1">
                 이탈률 {traffic.summary.bounceRate}%
               </p>
             </div>
           </div>
 
           {/* 상세 분석 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
             {/* 유입 경로 */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">유입 경로</h3>
+            <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
+              <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-4">유입 경로</h3>
               <div className="space-y-3">
                 {traffic.trafficSources.length === 0 ? (
                   <p className="text-gray-500 text-center py-4">데이터가 없습니다.</p>
@@ -237,8 +237,8 @@ export default function VisitorsPage() {
             </div>
 
             {/* 지역별 */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">지역별 방문자</h3>
+            <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
+              <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-4">지역별 방문자</h3>
               <div className="space-y-2">
                 {traffic.regions.length === 0 ? (
                   <p className="text-gray-500 text-center py-4">데이터가 없습니다.</p>
@@ -259,8 +259,8 @@ export default function VisitorsPage() {
             </div>
 
             {/* 디바이스 */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">디바이스</h3>
+            <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
+              <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-4">디바이스</h3>
               <div className="grid grid-cols-3 gap-4">
                 {traffic.devices.map((device, index) => {
                   const total = traffic.devices.reduce((sum, d) => sum + d.count, 0);
@@ -290,8 +290,8 @@ export default function VisitorsPage() {
             </div>
 
             {/* 브라우저 */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">브라우저</h3>
+            <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
+              <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-4">브라우저</h3>
               <div className="space-y-2">
                 {traffic.browsers.map((browser, index) => (
                   <div
@@ -309,9 +309,11 @@ export default function VisitorsPage() {
           </div>
 
           {/* 최근 방문자 */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">최근 방문자</h3>
-            <div className="overflow-x-auto">
+          <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
+            <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-4">최근 방문자</h3>
+
+            {/* 데스크톱 테이블 */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="text-left text-sm text-gray-500 border-b">
@@ -380,6 +382,61 @@ export default function VisitorsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* 모바일 카드 */}
+            <div className="md:hidden space-y-3">
+              {realtime.recentVisitors.map((visitor) => (
+                <div key={visitor.id} className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">
+                      {new Date(visitor.lastVisit).toLocaleString('ko-KR', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                    {visitor.isBlocked ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        차단됨
+                      </span>
+                    ) : visitor.riskScore >= 70 ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                        의심 {visitor.riskScore}점
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        정상
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-900 font-medium">
+                      {formatDeviceName(visitor)}
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {visitor.landingSite?.name || '미분류'}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <div>
+                      {visitor.browser || 'Unknown'}
+                      {visitor.browserVersion && ` ${visitor.browserVersion.split('.')[0]}`}
+                      {' · '}
+                      {visitor.os || 'Unknown'}
+                      {visitor.osVersion && ` ${visitor.osVersion.split('.')[0]}`}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>📍 {visitor.city || visitor.country || '-'}</span>
+                      <span className="font-mono">{visitor.ipAddress || '-'}</span>
+                    </div>
+                    <div>🔗 {getSourceLabel(visitor.utmSource)}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </>
