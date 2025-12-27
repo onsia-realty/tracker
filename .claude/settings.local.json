@@ -21,7 +21,8 @@
       "Bash(pnpm run build)",
       "Bash(curl:*)",
       "mcp__playwright__browser_run_code",
-      "WebFetch(domain:a1.smlog.co.kr)"
+      "WebFetch(domain:a1.smlog.co.kr)",
+      "mcp__playwright__browser_wait_for"
     ],
     "deny": [],
     "ask": []
