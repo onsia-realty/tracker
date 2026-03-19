@@ -596,4 +596,5 @@ if (typeof window !== 'undefined') {
 }
 
 export default OnsiaTracker;
-export { OnsiaTracker, TrackerConfig, SessionData, PageviewData, ClickData };
+export { OnsiaTracker };
+export type { TrackerConfig, SessionData, PageviewData, ClickData };
