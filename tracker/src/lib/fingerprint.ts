@@ -110,8 +110,9 @@ export async function detectDevice(): Promise<DeviceInfo> {
         // 벤더 추정 (플랫폼 기반)
         if (highEntropy.platform === 'Android') {
           // 안드로이드는 모델명으로 벤더 추정
-          if (deviceModel.toLowerCase().includes('sm-')) deviceVendor = 'Samsung';
-          else if (deviceModel.toLowerCase().includes('pixel')) deviceVendor = 'Google';
+          const model = deviceModel!.toLowerCase();
+          if (model.includes('sm-')) deviceVendor = 'Samsung';
+          else if (model.includes('pixel')) deviceVendor = 'Google';
           else deviceVendor = 'Android';
         }
       }
