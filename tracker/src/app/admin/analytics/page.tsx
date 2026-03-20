@@ -42,7 +42,7 @@ interface OverviewStats {
     estimatedSavedCost: number;
   };
   trafficSources: Array<{ source: string; count: number }>;
-  devices: Array<{ type: string; count: number }>;
+  devices: Array<{ type: string; vendor: string | null; model: string | null; count: number }>;
   recentFraudClicks: Array<{
     id: string;
     timestamp: string;
@@ -53,6 +53,8 @@ interface OverviewStats {
       fingerprint: string;
       ipAddress: string;
       deviceType: string;
+      deviceVendor: string | null;
+      deviceModel: string | null;
       browser: string;
       city: string;
     };
@@ -63,15 +65,31 @@ interface OverviewStats {
 // 메인 컴포넌트
 // ===========================================
 
+interface LandingSite {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export default function AnalyticsDashboard() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sites, setSites] = useState<LandingSite[]>([]);
+  const [selectedSite, setSelectedSite] = useState<string>('all');
+
+  useEffect(() => {
+    fetch('/api/admin/sites')
+      .then(res => res.json())
+      .then(data => setSites(data))
+      .catch(console.error);
+  }, []);
 
   const fetchStats = useCallback(async () => {
     try {
-      const response = await fetch(`/api/analytics/stats?period=${period}&type=overview`);
+      const siteParam = selectedSite !== 'all' ? `&site=${selectedSite}` : '';
+      const response = await fetch(`/api/analytics/stats?period=${period}&type=overview${siteParam}`);
       if (!response.ok) throw new Error('Failed to fetch stats');
       const data = await response.json();
       setStats(data);
@@ -82,7 +100,7 @@ export default function AnalyticsDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [period, selectedSite]);
 
   useEffect(() => {
     fetchStats();
@@ -114,22 +132,38 @@ export default function AnalyticsDashboard() {
   return (
     <div className="space-y-6">
       {/* 헤더 */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4">
         <h1 className="text-2xl font-bold text-gray-900">분석 대시보드</h1>
-        <div className="flex gap-2">
-          {(['today', 'week', 'month'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                period === p
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {p === 'today' ? '오늘' : p === 'week' ? '이번 주' : '이번 달'}
-            </button>
-          ))}
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          {/* 사이트 선택 */}
+          <select
+            value={selectedSite}
+            onChange={(e) => setSelectedSite(e.target.value)}
+            className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 transition"
+          >
+            <option value="all">전체 사이트</option>
+            {sites.map((site) => (
+              <option key={site.id} value={site.slug}>
+                {site.name}
+              </option>
+            ))}
+          </select>
+          {/* 기간 선택 */}
+          <div className="flex gap-2">
+            {(['today', 'week', 'month'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  period === p
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {p === 'today' ? '오늘' : p === 'week' ? '이번 주' : '이번 달'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -196,26 +230,39 @@ export default function AnalyticsDashboard() {
         {/* 디바이스 분포 */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">디바이스 분포</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={stats.devices}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={5}
-                dataKey="count"
-                nameKey="type"
-                label={({ name, percent }) => `${name || ''} ${((percent || 0) * 100).toFixed(0)}%`}
-              >
-                {stats.devices.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          {(() => {
+            const formattedDevices = stats.devices.map(d => ({
+              ...d,
+              name: d.vendor && d.model && d.model !== 'Unknown'
+                ? (d.vendor === 'Apple' ? d.model : `${d.vendor} ${d.model}`)
+                : d.type || 'Unknown',
+            }));
+            return (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={formattedDevices}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="count"
+                    nameKey="name"
+                    label={({ name, percent }) => {
+                      const displayName = name || 'Unknown';
+                      return `${displayName} ${((percent || 0) * 100).toFixed(0)}%`;
+                    }}
+                  >
+                    {formattedDevices.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            );
+          })()}
         </div>
       </div>
 
@@ -258,7 +305,16 @@ export default function AnalyticsDashboard() {
                       {click.session.ipAddress || '-'}
                     </td>
                     <td className="py-3 text-gray-600">
-                      {click.session.deviceType} / {click.session.browser}
+                      <div className="flex flex-col">
+                        <span className="text-gray-900">
+                          {click.session.deviceVendor && click.session.deviceModel && click.session.deviceModel !== 'Unknown'
+                            ? (click.session.deviceVendor === 'Apple'
+                              ? click.session.deviceModel
+                              : `${click.session.deviceVendor} ${click.session.deviceModel}`)
+                            : click.session.deviceType || 'Unknown'}
+                        </span>
+                        <span className="text-xs text-gray-400">{click.session.browser}</span>
+                      </div>
                     </td>
                     <td className="py-3">
                       <span

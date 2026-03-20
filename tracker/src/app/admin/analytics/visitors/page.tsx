@@ -47,6 +47,11 @@ interface RealtimeData {
       name: string;
       slug: string;
     } | null;
+    pageViews?: Array<{
+      path: string;
+      fullUrl: string | null;
+      enterTime: string;
+    }>;
   }>;
 }
 
@@ -67,6 +72,8 @@ export default function VisitorsPage() {
   const [loading, setLoading] = useState(true);
   const [sites, setSites] = useState<LandingSite[]>([]);
   const [selectedSite, setSelectedSite] = useState<string>('all');
+  const [selectedPath, setSelectedPath] = useState<string>('all');
+  const [availablePaths, setAvailablePaths] = useState<string[]>([]);
 
   // 사이트 목록 로드
   useEffect(() => {
@@ -79,9 +86,10 @@ export default function VisitorsPage() {
   const fetchData = useCallback(async () => {
     try {
       const siteParam = selectedSite !== 'all' ? `&site=${selectedSite}` : '';
+      const pathParam = selectedPath !== 'all' ? `&path=${selectedPath}` : '';
       const [trafficRes, realtimeRes] = await Promise.all([
-        fetch(`/api/analytics/stats?period=${period}&type=traffic${siteParam}`),
-        fetch(`/api/analytics/stats?type=realtime${siteParam}`),
+        fetch(`/api/analytics/stats?period=${period}&type=traffic${siteParam}${pathParam}`),
+        fetch(`/api/analytics/stats?type=realtime${siteParam}${pathParam}`),
       ]);
 
       if (trafficRes.ok) setTraffic(await trafficRes.json());
@@ -91,7 +99,7 @@ export default function VisitorsPage() {
     } finally {
       setLoading(false);
     }
-  }, [period, selectedSite]);
+  }, [period, selectedSite, selectedPath]);
 
   useEffect(() => {
     fetchData();
@@ -128,6 +136,17 @@ export default function VisitorsPage() {
                 {site.name}
               </option>
             ))}
+          </select>
+
+          {/* 페이지 경로 필터 */}
+          <select
+            value={selectedPath}
+            onChange={(e) => setSelectedPath(e.target.value)}
+            className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 transition"
+          >
+            <option value="all">전체 페이지</option>
+            <option value="/urbanhomes">왕십리 어반홈스</option>
+            <option value="/">메인 페이지</option>
           </select>
 
           {/* 기간 선택 */}
@@ -327,9 +346,12 @@ export default function VisitorsPage() {
                   </tr>
                 </thead>
                 <tbody className="text-sm">
-                  {realtime.recentVisitors.map((visitor) => (
-                    <tr key={visitor.id} className="border-b last:border-0">
+                  {realtime.recentVisitors.map((visitor) => {
+                    const isMyVisit = visitor.ipAddress === '220.117.73.250';
+                    return (
+                    <tr key={visitor.id} className={`border-b last:border-0 ${isMyVisit ? 'bg-yellow-50' : ''}`}>
                       <td className="py-3 text-gray-600">
+                        {isMyVisit && <span className="text-xs text-yellow-600 font-medium mr-1">내 방문</span>}
                         {new Date(visitor.lastVisit).toLocaleString('ko-KR', {
                           hour: '2-digit',
                           minute: '2-digit',
@@ -360,8 +382,49 @@ export default function VisitorsPage() {
                       <td className="py-3 text-gray-700">
                         {visitor.city || visitor.country || '-'}
                       </td>
-                      <td className="py-3 text-gray-700">
-                        {getSourceLabel(visitor.utmSource)}
+                      <td className="py-3">
+                        <div className="flex flex-col">
+                          <span className="text-gray-700">
+                            {(() => {
+                              const adInfo = detectNaverAd(visitor);
+                              if (adInfo.isNaverAd) {
+                                return (
+                                  <>
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mr-1">
+                                      네이버 광고
+                                    </span>
+                                    {adInfo.matchType && (
+                                      <span className="text-xs text-gray-500">({adInfo.matchType})</span>
+                                    )}
+                                  </>
+                                );
+                              }
+                              return getSourceLabel(visitor.utmSource);
+                            })()}
+                          </span>
+                          {(() => {
+                            const adInfo = detectNaverAd(visitor);
+                            if (adInfo.isNaverAd && adInfo.query) {
+                              return (
+                                <span className="text-xs text-blue-600 font-medium">
+                                  &quot;{adInfo.query}&quot;
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                          {visitor.referrer && (
+                            <a
+                              href={visitor.referrer}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-500 hover:text-blue-700 hover:underline truncate max-w-[300px] block"
+                              title={visitor.referrer}
+                            >
+                              {visitor.referrer}
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3">
                         {visitor.isBlocked ? (
@@ -379,17 +442,21 @@ export default function VisitorsPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* 모바일 카드 */}
             <div className="md:hidden space-y-3">
-              {realtime.recentVisitors.map((visitor) => (
-                <div key={visitor.id} className="bg-gray-50 rounded-lg p-4 space-y-2">
+              {realtime.recentVisitors.map((visitor) => {
+                const isMyVisit = visitor.ipAddress === '220.117.73.250';
+                return (
+                <div key={visitor.id} className={`rounded-lg p-4 space-y-2 ${isMyVisit ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-500">
+                      {isMyVisit && <span className="text-xs text-yellow-600 font-medium mr-1">내 방문</span>}
                       {new Date(visitor.lastVisit).toLocaleString('ko-KR', {
                         month: 'short',
                         day: 'numeric',
@@ -433,10 +500,37 @@ export default function VisitorsPage() {
                       <span>📍 {visitor.city || visitor.country || '-'}</span>
                       <span className="font-mono">{visitor.ipAddress || '-'}</span>
                     </div>
-                    <div>🔗 {getSourceLabel(visitor.utmSource)}</div>
+                    <div>
+                      {(() => {
+                        const adInfo = detectNaverAd(visitor);
+                        if (adInfo.isNaverAd) {
+                          return (
+                            <>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                네이버 광고
+                              </span>
+                              {adInfo.query && <span className="text-blue-600 ml-1">&quot;{adInfo.query}&quot;</span>}
+                            </>
+                          );
+                        }
+                        return <>🔗 {getSourceLabel(visitor.utmSource)}</>;
+                      })()}
+                    </div>
+                    {visitor.referrer && (
+                      <a
+                        href={visitor.referrer}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-700 hover:underline truncate block"
+                        title={visitor.referrer}
+                      >
+                        ↳ {visitor.referrer}
+                      </a>
+                    )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </>
@@ -470,6 +564,26 @@ function getSourceLabel(source: string | null): string {
     direct: '직접 방문',
   };
   return labels[source.toLowerCase()] || source;
+}
+
+function detectNaverAd(visitor: RealtimeData['recentVisitors'][0]): { isNaverAd: boolean; query: string | null; keyword: string | null; matchType: string | null } {
+  const pageView = visitor.pageViews?.[0];
+  if (!pageView?.fullUrl) return { isNaverAd: false, query: null, keyword: null, matchType: null };
+
+  try {
+    const url = new URL(pageView.fullUrl);
+    const nMedia = url.searchParams.get('n_media');
+    if (!nMedia) return { isNaverAd: false, query: null, keyword: null, matchType: null };
+
+    return {
+      isNaverAd: true,
+      query: url.searchParams.get('n_query'),
+      keyword: url.searchParams.get('n_keyword'),
+      matchType: url.searchParams.get('n_match') === '1' ? '정확' : url.searchParams.get('n_match') === '2' ? '확장' : null,
+    };
+  } catch {
+    return { isNaverAd: false, query: null, keyword: null, matchType: null };
+  }
 }
 
 function formatDeviceName(visitor: RealtimeData['recentVisitors'][0]): string {

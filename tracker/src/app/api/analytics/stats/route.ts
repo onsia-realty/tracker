@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const landingSiteSlug = searchParams.get('site');
+    const pagePath = searchParams.get('path'); // e.g., '/urbanhomes'
     const period = searchParams.get('period') || 'today'; // today, week, month
     const type = searchParams.get('type') || 'overview'; // overview, traffic, fraud, realtime
 
@@ -69,25 +70,25 @@ export async function GET(request: NextRequest) {
     switch (type) {
       case 'realtime':
         return NextResponse.json(
-          await getRealtimeStats(landingSiteId),
+          await getRealtimeStats(landingSiteId, pagePath),
           { headers: corsHeaders }
         );
 
       case 'traffic':
         return NextResponse.json(
-          await getTrafficStats(landingSiteId, startDate),
+          await getTrafficStats(landingSiteId, startDate, pagePath),
           { headers: corsHeaders }
         );
 
       case 'fraud':
         return NextResponse.json(
-          await getFraudStats(landingSiteId, startDate),
+          await getFraudStats(landingSiteId, startDate, pagePath),
           { headers: corsHeaders }
         );
 
       default: // overview
         return NextResponse.json(
-          await getOverviewStats(landingSiteId, startDate),
+          await getOverviewStats(landingSiteId, startDate, pagePath),
           { headers: corsHeaders }
         );
     }
@@ -104,30 +105,45 @@ export async function GET(request: NextRequest) {
 // 실시간 통계 (최근 5분)
 // ===========================================
 
-async function getRealtimeStats(landingSiteId: string | null) {
+async function getRealtimeStats(landingSiteId: string | null, pagePath?: string | null) {
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-  const whereClause = landingSiteId
-    ? { landingSiteId, lastVisit: { gte: fiveMinutesAgo } }
-    : { lastVisit: { gte: fiveMinutesAgo } };
+  // If pagePath filter, get session IDs that visited this path
+  let sessionIdFilter: string[] | null = null;
+  if (pagePath) {
+    const pvSessions = await prisma.pageView.findMany({
+      where: { path: pagePath },
+      select: { sessionId: true },
+      distinct: ['sessionId'],
+    });
+    sessionIdFilter = pvSessions.map(pv => pv.sessionId);
+  }
 
   // 실시간 방문자 수
+  const realtimeWhere: any = { lastVisit: { gte: fiveMinutesAgo } };
+  if (landingSiteId) realtimeWhere.landingSiteId = landingSiteId;
+  if (sessionIdFilter) realtimeWhere.id = { in: sessionIdFilter };
+
   const realtimeVisitors = await prisma.visitorSession.count({
-    where: whereClause,
+    where: realtimeWhere,
   });
 
   // 실시간 페이지뷰
-  const pageViewWhere = landingSiteId
-    ? { landingSiteId, enterTime: { gte: fiveMinutesAgo } }
-    : { enterTime: { gte: fiveMinutesAgo } };
+  const pageViewWhere: any = { enterTime: { gte: fiveMinutesAgo } };
+  if (landingSiteId) pageViewWhere.landingSiteId = landingSiteId;
+  if (pagePath) pageViewWhere.path = pagePath;
 
   const realtimePageViews = await prisma.pageView.count({
     where: pageViewWhere,
   });
 
   // 최근 방문자 목록 (10명)
+  const visitorsWhere: any = {};
+  if (landingSiteId) visitorsWhere.landingSiteId = landingSiteId;
+  if (sessionIdFilter) visitorsWhere.id = { in: sessionIdFilter };
+
   const recentVisitors = await prisma.visitorSession.findMany({
-    where: landingSiteId ? { landingSiteId } : {},
+    where: visitorsWhere,
     orderBy: { lastVisit: 'desc' },
     take: 10,
     select: {
@@ -153,6 +169,11 @@ async function getRealtimeStats(landingSiteId: string | null) {
           slug: true,
         },
       },
+      pageViews: {
+        select: { path: true, fullUrl: true, enterTime: true },
+        orderBy: { enterTime: 'desc' as const },
+        take: 1,
+      },
     },
   });
 
@@ -170,10 +191,21 @@ async function getRealtimeStats(landingSiteId: string | null) {
 // 트래픽 통계
 // ===========================================
 
-async function getTrafficStats(landingSiteId: string | null, startDate: Date) {
-  const whereClause = landingSiteId
-    ? { landingSiteId, firstVisit: { gte: startDate } }
-    : { firstVisit: { gte: startDate } };
+async function getTrafficStats(landingSiteId: string | null, startDate: Date, pagePath?: string | null) {
+  // If pagePath, get sessionIds that visited that path within the date range
+  let sessionIdFilter: string[] | null = null;
+  if (pagePath) {
+    const pvSessions = await prisma.pageView.findMany({
+      where: { path: pagePath, enterTime: { gte: startDate } },
+      select: { sessionId: true },
+      distinct: ['sessionId'],
+    });
+    sessionIdFilter = pvSessions.map(pv => pv.sessionId);
+  }
+
+  const whereClause: any = { firstVisit: { gte: startDate } };
+  if (landingSiteId) whereClause.landingSiteId = landingSiteId;
+  if (sessionIdFilter) whereClause.id = { in: sessionIdFilter };
 
   // 총 방문자
   const totalVisitors = await prisma.visitorSession.count({
@@ -189,9 +221,9 @@ async function getTrafficStats(landingSiteId: string | null, startDate: Date) {
   const returningVisitors = totalVisitors - newVisitors;
 
   // 총 페이지뷰
-  const pageViewWhere = landingSiteId
-    ? { landingSiteId, enterTime: { gte: startDate } }
-    : { enterTime: { gte: startDate } };
+  const pageViewWhere: any = { enterTime: { gte: startDate } };
+  if (landingSiteId) pageViewWhere.landingSiteId = landingSiteId;
+  if (pagePath) pageViewWhere.path = pagePath;
 
   const totalPageViews = await prisma.pageView.count({
     where: pageViewWhere,
@@ -214,7 +246,7 @@ async function getTrafficStats(landingSiteId: string | null, startDate: Date) {
 
   // 디바이스별 통계
   const deviceStats = await prisma.visitorSession.groupBy({
-    by: ['deviceType'],
+    by: ['deviceType', 'deviceVendor', 'deviceModel'],
     where: whereClause,
     _count: { id: true },
   });
@@ -254,6 +286,8 @@ async function getTrafficStats(landingSiteId: string | null, startDate: Date) {
     })),
     devices: deviceStats.map((d) => ({
       type: d.deviceType || 'unknown',
+      vendor: d.deviceVendor || 'unknown',
+      model: d.deviceModel || 'unknown',
       count: d._count.id,
     })),
     browsers: browserStats.map((b) => ({
@@ -271,10 +305,10 @@ async function getTrafficStats(landingSiteId: string | null, startDate: Date) {
 // 부정클릭 통계
 // ===========================================
 
-async function getFraudStats(landingSiteId: string | null, startDate: Date) {
-  const clickWhere = landingSiteId
-    ? { landingSiteId, timestamp: { gte: startDate } }
-    : { timestamp: { gte: startDate } };
+async function getFraudStats(landingSiteId: string | null, startDate: Date, pagePath?: string | null) {
+  const clickWhere: any = { timestamp: { gte: startDate } };
+  if (landingSiteId) clickWhere.landingSiteId = landingSiteId;
+  if (pagePath) clickWhere.pageUrl = { contains: pagePath };
 
   // 총 클릭
   const totalClicks = await prisma.clickEvent.count({
@@ -339,12 +373,32 @@ async function getFraudStats(landingSiteId: string | null, startDate: Date) {
           fingerprint: true,
           ipAddress: true,
           deviceType: true,
+          deviceVendor: true,
+          deviceModel: true,
           browser: true,
           city: true,
         },
       },
     },
   });
+
+  // 의심 IP 통계
+  const suspiciousIPs = await prisma.clickEvent.groupBy({
+    by: ['sessionId'],
+    where: { ...clickWhere, isFraud: true },
+    _count: { id: true },
+    _max: { fraudScore: true, timestamp: true },
+    orderBy: { _count: { id: 'desc' } },
+    take: 20,
+  });
+
+  // Get IP addresses for these sessions
+  const sessionIds = suspiciousIPs.map(s => s.sessionId);
+  const sessions = await prisma.visitorSession.findMany({
+    where: { id: { in: sessionIds } },
+    select: { id: true, ipAddress: true, riskScore: true, deviceType: true, deviceVendor: true, deviceModel: true, browser: true },
+  });
+  const sessionMap = new Map(sessions.map(s => [s.id, s]));
 
   // 저장된 비용 추정 (네이버 평균 CPC 500원, 구글 300원 기준)
   const savedCost = fraudClicks * 400; // 평균 CPC
@@ -379,10 +433,24 @@ async function getFraudStats(landingSiteId: string | null, startDate: Date) {
         fingerprint: c.session.fingerprint.substring(0, 8) + '...',
         ipAddress: c.session.ipAddress,
         deviceType: c.session.deviceType,
+        deviceVendor: c.session.deviceVendor,
+        deviceModel: c.session.deviceModel,
         browser: c.session.browser,
         city: c.session.city,
       },
     })),
+    suspiciousIPs: suspiciousIPs.map(s => {
+      const session = sessionMap.get(s.sessionId);
+      return {
+        ipAddress: session?.ipAddress || 'unknown',
+        fraudClickCount: s._count.id,
+        lastDetected: s._max.timestamp,
+        maxFraudScore: s._max.fraudScore || 0,
+        riskScore: session?.riskScore || 0,
+        deviceInfo: session ? `${session.deviceVendor || ''} ${session.deviceModel || session.deviceType || ''}`.trim() : '-',
+        browser: session?.browser || '-',
+      };
+    }),
   };
 }
 
@@ -390,11 +458,11 @@ async function getFraudStats(landingSiteId: string | null, startDate: Date) {
 // 전체 개요 통계
 // ===========================================
 
-async function getOverviewStats(landingSiteId: string | null, startDate: Date) {
+async function getOverviewStats(landingSiteId: string | null, startDate: Date, pagePath?: string | null) {
   const [realtime, traffic, fraud] = await Promise.all([
-    getRealtimeStats(landingSiteId),
-    getTrafficStats(landingSiteId, startDate),
-    getFraudStats(landingSiteId, startDate),
+    getRealtimeStats(landingSiteId, pagePath),
+    getTrafficStats(landingSiteId, startDate, pagePath),
+    getFraudStats(landingSiteId, startDate, pagePath),
   ]);
 
   return {
@@ -404,6 +472,7 @@ async function getOverviewStats(landingSiteId: string | null, startDate: Date) {
     trafficSources: traffic.trafficSources.slice(0, 5),
     devices: traffic.devices,
     recentFraudClicks: fraud.recentFraudClicks.slice(0, 5),
+    recentVisitors: realtime.recentVisitors,
   };
 }
 // Force redeploy

@@ -28,10 +28,27 @@ interface FraudStats {
       fingerprint: string;
       ipAddress: string;
       deviceType: string;
+      deviceVendor: string | null;
+      deviceModel: string | null;
       browser: string;
       city: string;
     };
   }>;
+  suspiciousIPs: Array<{
+    ipAddress: string;
+    fraudClickCount: number;
+    lastDetected: string;
+    maxFraudScore: number;
+    riskScore: number;
+    deviceInfo: string;
+    browser: string;
+  }>;
+}
+
+interface LandingSite {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 // ===========================================
@@ -42,10 +59,20 @@ export default function FraudPage() {
   const [stats, setStats] = useState<FraudStats | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [loading, setLoading] = useState(true);
+  const [sites, setSites] = useState<LandingSite[]>([]);
+  const [selectedSite, setSelectedSite] = useState<string>('all');
+
+  useEffect(() => {
+    fetch('/api/admin/sites')
+      .then(res => res.json())
+      .then(data => setSites(data))
+      .catch(console.error);
+  }, []);
 
   const fetchStats = useCallback(async () => {
     try {
-      const response = await fetch(`/api/analytics/stats?period=${period}&type=fraud`);
+      const siteParam = selectedSite !== 'all' ? `&site=${selectedSite}` : '';
+      const response = await fetch(`/api/analytics/stats?period=${period}&type=fraud${siteParam}`);
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       setStats(data);
@@ -54,7 +81,7 @@ export default function FraudPage() {
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [period, selectedSite]);
 
   useEffect(() => {
     fetchStats();
@@ -77,27 +104,43 @@ export default function FraudPage() {
   return (
     <div className="space-y-6">
       {/* 헤더 */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">부정클릭 탐지</h1>
           <p className="text-gray-500 mt-1">
             실시간 부정클릭 모니터링 및 차단 현황
           </p>
         </div>
-        <div className="flex gap-2">
-          {(['today', 'week', 'month'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                period === p
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {p === 'today' ? '오늘' : p === 'week' ? '이번 주' : '이번 달'}
-            </button>
-          ))}
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          {/* 사이트 선택 */}
+          <select
+            value={selectedSite}
+            onChange={(e) => setSelectedSite(e.target.value)}
+            className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 transition"
+          >
+            <option value="all">전체 사이트</option>
+            {sites.map((site) => (
+              <option key={site.id} value={site.slug}>
+                {site.name}
+              </option>
+            ))}
+          </select>
+          {/* 기간 선택 */}
+          <div className="flex gap-2">
+            {(['today', 'week', 'month'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  period === p
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {p === 'today' ? '오늘' : p === 'week' ? '이번 주' : '이번 달'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -250,9 +293,16 @@ export default function FraudPage() {
                       {click.session.fingerprint}
                     </td>
                     <td className="py-4 text-gray-600">
-                      <span className="capitalize">{click.session.deviceType}</span>
-                      <span className="text-gray-400"> / </span>
-                      {click.session.browser}
+                      <div className="flex flex-col">
+                        <span className="text-gray-900">
+                          {click.session.deviceVendor && click.session.deviceModel && click.session.deviceModel !== 'Unknown'
+                            ? (click.session.deviceVendor === 'Apple'
+                              ? click.session.deviceModel
+                              : `${click.session.deviceVendor} ${click.session.deviceModel}`)
+                            : click.session.deviceType || 'Unknown'}
+                        </span>
+                        <span className="text-xs text-gray-400">{click.session.browser}</span>
+                      </div>
                     </td>
                     <td className="py-4 text-gray-600">
                       {click.session.city || '-'}
@@ -282,6 +332,86 @@ export default function FraudPage() {
           </table>
         </div>
       </div>
+
+      {/* 부정클릭 의심 IP 목록 */}
+      {stats.suspiciousIPs && stats.suspiciousIPs.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            부정클릭 의심 IP 목록
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-sm text-gray-500 border-b">
+                  <th className="pb-3 font-medium">IP 주소</th>
+                  <th className="pb-3 font-medium">부정클릭 횟수</th>
+                  <th className="pb-3 font-medium">최근 감지</th>
+                  <th className="pb-3 font-medium">최고 위험도</th>
+                  <th className="pb-3 font-medium">리스크 점수</th>
+                  <th className="pb-3 font-medium">기기 정보</th>
+                  <th className="pb-3 font-medium">브라우저</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {stats.suspiciousIPs.map((ip, index) => (
+                  <tr key={index} className="border-b last:border-0 hover:bg-gray-50">
+                    <td className="py-4 font-mono text-gray-900 font-medium">
+                      {ip.ipAddress}
+                    </td>
+                    <td className="py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        ip.fraudClickCount >= 10
+                          ? 'bg-red-100 text-red-800'
+                          : ip.fraudClickCount >= 5
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {ip.fraudClickCount}회
+                      </span>
+                    </td>
+                    <td className="py-4 text-gray-600">
+                      {new Date(ip.lastDetected).toLocaleString('ko-KR', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </td>
+                    <td className="py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        ip.maxFraudScore >= 100
+                          ? 'bg-red-100 text-red-800'
+                          : ip.maxFraudScore >= 70
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {ip.maxFraudScore}점
+                      </span>
+                    </td>
+                    <td className="py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        ip.riskScore >= 85
+                          ? 'bg-red-100 text-red-800'
+                          : ip.riskScore >= 70
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {ip.riskScore}점
+                      </span>
+                    </td>
+                    <td className="py-4 text-gray-600">
+                      {ip.deviceInfo}
+                    </td>
+                    <td className="py-4 text-gray-600">
+                      {ip.browser}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* 네이버/구글 광고 차단 안내 */}
       <div className="bg-blue-50 rounded-xl p-6">
