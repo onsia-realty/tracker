@@ -108,10 +108,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 기존 세션 조회 (24시간 내 같은 핑거프린트)
+    // 기존 세션 조회 (24시간 내 같은 핑거프린트 + 같은 사이트)
     const existingSession = await prisma.visitorSession.findFirst({
       where: {
         fingerprint: body.fingerprint,
+        landingSiteId: landingSite?.id || null,
         lastVisit: {
           gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // 24시간
         },

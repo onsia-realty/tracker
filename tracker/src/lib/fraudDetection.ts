@@ -231,11 +231,12 @@ function checkGeoTime(context: FraudCheckContext): { score: number; reasons: str
     }
   }
 
-  // 새벽 시간대 검사 (2-6시)
-  const hour = new Date().getHours();
-  if (RULES.NIGHT_TIME.hours.includes(hour)) {
+  // 새벽 시간대 검사 (2-6시, 한국 시간 기준)
+  const hour = new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul', hour12: false, hour: '2-digit' });
+  const kstHour = parseInt(hour, 10);
+  if (RULES.NIGHT_TIME.hours.includes(kstHour)) {
     score += RULES.NIGHT_TIME.score;
-    reasons.push(`새벽 시간대 클릭 (${hour}시)`);
+    reasons.push(`새벽 시간대 클릭 (KST ${kstHour}시)`);
   }
 
   return { score, reasons };
