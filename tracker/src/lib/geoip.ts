@@ -17,6 +17,8 @@ export interface GeoIPInfo {
   region: string | null;
   city: string | null;
   isp: string | null;
+  latitude: number | null;
+  longitude: number | null;
   isVpn: boolean;
   isProxy: boolean;
   isHosting: boolean;
@@ -33,6 +35,8 @@ interface IpApiResponse {
   region: string;
   regionName: string;
   city: string;
+  lat: number;
+  lon: number;
   isp: string;
   org: string;
   as: string;
@@ -52,6 +56,8 @@ export async function getGeoIPFromIpApi(ip: string): Promise<GeoIPInfo | null> {
         region: '경기도',
         city: '로컬',
         isp: null,
+        latitude: null,
+        longitude: null,
         isVpn: false,
         isProxy: false,
         isHosting: false,
@@ -59,7 +65,7 @@ export async function getGeoIPFromIpApi(ip: string): Promise<GeoIPInfo | null> {
     }
 
     const response = await fetch(
-      `http://ip-api.com/json/${ip}?fields=status,country,countryCode,region,regionName,city,isp,org,as,hosting,proxy,query&lang=ko`,
+      `http://ip-api.com/json/${ip}?fields=status,country,countryCode,region,regionName,city,lat,lon,isp,org,as,hosting,proxy,query&lang=ko`,
       { next: { revalidate: 86400 } } // 24시간 캐시
     );
 
@@ -81,6 +87,8 @@ export async function getGeoIPFromIpApi(ip: string): Promise<GeoIPInfo | null> {
       region: data.regionName,
       city: data.city,
       isp: data.isp,
+      latitude: data.lat || null,
+      longitude: data.lon || null,
       isVpn: false, // ip-api 무료 버전에서는 VPN 감지 불가
       isProxy: data.proxy,
       isHosting: data.hosting,
@@ -126,6 +134,8 @@ export async function getGeoIPFromIpInfo(ip: string): Promise<GeoIPInfo | null> 
         region: '경기도',
         city: '로컬',
         isp: null,
+        latitude: null,
+        longitude: null,
         isVpn: false,
         isProxy: false,
         isHosting: false,
@@ -147,6 +157,8 @@ export async function getGeoIPFromIpInfo(ip: string): Promise<GeoIPInfo | null> 
 
     const data: IpInfoResponse = await response.json();
 
+    const [lat, lon] = data.loc ? data.loc.split(',').map(Number) : [null, null];
+
     return {
       ip: data.ip,
       country: getCountryName(data.country),
@@ -154,6 +166,8 @@ export async function getGeoIPFromIpInfo(ip: string): Promise<GeoIPInfo | null> 
       region: data.region,
       city: data.city,
       isp: data.org,
+      latitude: lat,
+      longitude: lon,
       isVpn: data.privacy?.vpn || false,
       isProxy: data.privacy?.proxy || data.privacy?.tor || data.privacy?.relay || false,
       isHosting: data.privacy?.hosting || false,

@@ -29,6 +29,10 @@ interface AnalyticsConfig {
   trackScroll?: boolean;
   trackMouse?: boolean;
   debugMode?: boolean;
+  /** 차단된 기기 처리 모드: 'redirect' = 리다이렉트, 'adOnly' = 광고 유입만 차단, 'none' = 기존(추적만 중단) */
+  blockMode?: 'redirect' | 'adOnly' | 'none';
+  /** 차단 시 리다이렉트할 URL (미설정 시 뒤로가기) */
+  blockRedirectUrl?: string;
 }
 
 interface AnalyticsTrackerProps {
@@ -70,6 +74,8 @@ export default function AnalyticsTracker({ config }: AnalyticsTrackerProps) {
     trackScroll = true,
     trackMouse = true,
     debugMode = false,
+    blockMode = 'redirect',
+    blockRedirectUrl,
   } = config;
 
   // Refs
@@ -157,22 +163,48 @@ export default function AnalyticsTracker({ config }: AnalyticsTrackerProps) {
       landingSiteSlug: siteSlug,
     });
 
+    // 차단된 기기 처리 (403 또는 isBlocked)
+    if (result?.isBlocked) {
+      log('🚫 Blocked device detected');
+
+      if (blockMode === 'none') {
+        log('Block mode: none — tracking stopped only');
+        return;
+      }
+
+      // 광고 유입 여부 확인
+      const referrer = document.referrer.toLowerCase();
+      const isFromAd = /naver\.com|google\.(com|co\.kr)|kakao\.com|daum\.net/.test(referrer)
+        || new URLSearchParams(window.location.search).has('utm_source')
+        || new URLSearchParams(window.location.search).has('n_campaign_type');
+
+      if (blockMode === 'adOnly' && !isFromAd) {
+        log('Block mode: adOnly — organic visit allowed');
+        return;
+      }
+
+      // 리다이렉트 실행
+      log('Redirecting blocked device...');
+      if (blockRedirectUrl) {
+        window.location.replace(blockRedirectUrl);
+      } else if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.replace('https://www.naver.com');
+      }
+      return;
+    }
+
     if (result?.sessionId) {
       sessionIdRef.current = result.sessionId;
       log('Session initialized:', result.sessionId, result.isNew ? '(new)' : '(existing)');
-
-      // 차단된 세션이면 추적 중단
-      if (result.isBlocked) {
-        log('Session is blocked, stopping tracking');
-        return;
-      }
 
       // 페이지뷰 기록
       await recordPageView();
     } else {
       log('Failed to initialize session:', result);
     }
-  }, [apiCall, log, siteSlug]);
+  }, [apiCall, log, siteSlug, blockMode, blockRedirectUrl]);
 
   // ===========================================
   // 페이지뷰 기록

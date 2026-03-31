@@ -80,6 +80,8 @@ model VisitorSession {
   region           String?
   city             String?
   isp              String?  // 통신사/ISP
+  latitude         Float?   // 위도
+  longitude        Float?   // 경도
   isVpn            Boolean  @default(false)
   isProxy          Boolean  @default(false)
 

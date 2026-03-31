@@ -159,6 +159,8 @@ export async function POST(request: NextRequest) {
           region: geoInfo?.region,
           city: geoInfo?.city,
           isp: geoInfo?.isp,
+          latitude: geoInfo?.latitude,
+          longitude: geoInfo?.longitude,
           isVpn: geoInfo?.isVpn || false,
           isProxy: geoInfo?.isProxy || false,
 

@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { applyGhostVisitScore } from '@/lib/fraudDetection';
 
 // ===========================================
 // CORS 헤더
@@ -163,6 +164,29 @@ export async function PATCH(request: NextRequest) {
           totalDwellTime: { increment: body.dwellTime },
         },
       });
+    }
+
+    // 유령 방문 검사 (체류시간 업데이트 후)
+    try {
+      const session = await prisma.visitorSession.findUnique({
+        where: { id: pageView.sessionId },
+        select: { fingerprint: true, ipAddress: true, isVpn: true, isProxy: true },
+      });
+      if (session) {
+        await applyGhostVisitScore({
+          sessionId: pageView.sessionId,
+          fingerprint: session.fingerprint,
+          ipAddress: session.ipAddress,
+          dwellTime: body.dwellTime || 0,
+          scrollDepth: body.scrollDepth || 0,
+          mouseMovements: body.mouseMovements || 0,
+          clicks: body.clicks || 0,
+          isVpn: session.isVpn,
+          isProxy: session.isProxy,
+        });
+      }
+    } catch (e) {
+      console.error('Ghost visit check failed:', e);
     }
 
     return NextResponse.json(

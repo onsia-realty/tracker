@@ -407,6 +407,110 @@ export function hasNormalBehavior(context: FraudCheckContext): boolean {
 }
 
 // ===========================================
+// 유령 방문 검사 (페이지뷰 종료 시 호출)
+// ===========================================
+
+export interface GhostVisitContext {
+  sessionId: string;
+  fingerprint: string;
+  ipAddress: string | null;
+  dwellTime: number;
+  scrollDepth: number;
+  mouseMovements: number;
+  clicks: number;
+  isVpn?: boolean;
+  isProxy?: boolean;
+}
+
+export async function checkGhostVisit(context: GhostVisitContext): Promise<{ score: number; reasons: string[] }> {
+  let score = 0;
+  const reasons: string[] = [];
+
+  // 1. 체류시간 5초 이하 + 스크롤 0%
+  if (context.dwellTime <= 5 && context.scrollDepth < 5) {
+    score += 25;
+    reasons.push(`체류 ${context.dwellTime}초 + 스크롤 ${context.scrollDepth}% (유령 방문)`);
+  } else if (context.dwellTime <= 10 && context.scrollDepth < 10) {
+    score += 15;
+    reasons.push(`체류 ${context.dwellTime}초 + 스크롤 ${context.scrollDepth}% (저관여)`);
+  }
+
+  // 2. 마우스/터치 이동 0회
+  if (context.mouseMovements === 0 && context.clicks === 0) {
+    score += 20;
+    reasons.push('마우스/터치 움직임 없음 (봇 의심)');
+  }
+
+  // 3. VPN/프록시
+  if (context.isVpn || context.isProxy) {
+    score += 25;
+    reasons.push('VPN/프록시 사용');
+  }
+
+  // 4. 같은 핑거프린트의 과거 유령 방문 횟수
+  const pastGhostCount = await prisma.pageView.count({
+    where: {
+      session: { fingerprint: context.fingerprint },
+      dwellTime: { lte: 5 },
+      scrollDepth: { lt: 5 },
+      mouseMovements: 0,
+    },
+  });
+
+  if (pastGhostCount >= 3) {
+    score += 30;
+    reasons.push(`동일 기기 유령 방문 ${pastGhostCount}회 반복`);
+  } else if (pastGhostCount >= 2) {
+    score += 15;
+    reasons.push(`동일 기기 유령 방문 ${pastGhostCount}회`);
+  }
+
+  // 5. 같은 핑거프린트가 다른 IP로 접속한 적 있는지 (IP 호핑)
+  if (context.ipAddress) {
+    const distinctIPs = await prisma.visitorSession.groupBy({
+      by: ['ipAddress'],
+      where: {
+        fingerprint: context.fingerprint,
+        lastVisit: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      },
+    });
+    if (distinctIPs.length >= 3) {
+      score += 20;
+      reasons.push(`동일 기기 IP ${distinctIPs.length}개 사용 (IP 변경 의심)`);
+    }
+  }
+
+  return { score: Math.min(score, 100), reasons };
+}
+
+// 유령 방문 점수를 세션 리스크에 반영
+export async function applyGhostVisitScore(context: GhostVisitContext): Promise<void> {
+  const result = await checkGhostVisit(context);
+  if (result.score <= 0) return;
+
+  const session = await prisma.visitorSession.findUnique({
+    where: { id: context.sessionId },
+    select: { riskScore: true },
+  });
+  if (!session) return;
+
+  const newScore = Math.min(Math.max(session.riskScore, result.score), 100);
+  const isSuspicious = newScore >= ACTION_THRESHOLDS.WARN;
+  const isBlocked = newScore >= ACTION_THRESHOLDS.BLOCK;
+
+  await prisma.visitorSession.update({
+    where: { id: context.sessionId },
+    data: {
+      riskScore: newScore,
+      isSuspicious,
+      isBlocked,
+      blockReason: isBlocked ? result.reasons.join(', ') : undefined,
+      blockedAt: isBlocked ? new Date() : undefined,
+    },
+  });
+}
+
+// ===========================================
 // 통합 판정 함수 (공유 IP 고려)
 // ===========================================
 
