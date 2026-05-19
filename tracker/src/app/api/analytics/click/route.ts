@@ -171,19 +171,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // SMS 알림 — 같은 IP + 같은 fingerprint(디바이스) + 같은 광고 키워드로 24h 내 3회 이상 접속 시 발송
-      // (자체 점수 시스템과 별개. false positive 거의 없는 명확한 룰.)
-      await maybeSendRepeatFraudSms({
-        sessionFingerprint: session.fingerprint,
-        ipAddress,
-        siteSlug: body.landingSiteSlug || null,
-        adKeyword: body.adKeyword ?? session.utmTerm ?? null,
-        adSource: body.adSource ?? session.utmSource ?? null,
-        utmCampaign: body.adCampaign ?? session.utmCampaign ?? null,
-        riskScore: fraudResult.riskScore,
-        reasons: fraudResult.reasons,
-        deviceLabel: `${session.browser || '?'}/${session.os || '?'}`,
-      });
     }
 
     // 클릭 이벤트 기록
@@ -219,6 +206,22 @@ export async function POST(request: NextRequest) {
         fraudScore: fraudResult.riskScore,
       },
     });
+
+    // SMS 알림 — 클릭 이벤트가 DB 저장된 후에 카운트해야 현재 클릭 포함됨.
+    // 같은 IP + 같은 fingerprint(디바이스) + 같은 광고 키워드로 24h 내 3회 이상 접속 시 발송.
+    if (body.eventType === 'ad_click' || body.eventType === 'cta_click') {
+      await maybeSendRepeatFraudSms({
+        sessionFingerprint: session.fingerprint,
+        ipAddress,
+        siteSlug: body.landingSiteSlug || null,
+        adKeyword: body.adKeyword ?? session.utmTerm ?? null,
+        adSource: body.adSource ?? session.utmSource ?? null,
+        utmCampaign: body.adCampaign ?? session.utmCampaign ?? null,
+        riskScore: fraudResult.riskScore,
+        reasons: fraudResult.reasons,
+        deviceLabel: `${session.browser || '?'}/${session.os || '?'}`,
+      });
+    }
 
     return NextResponse.json(
       {
