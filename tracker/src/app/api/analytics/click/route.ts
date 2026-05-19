@@ -14,7 +14,7 @@ import {
   updateSessionRisk,
   addToBlacklist,
 } from '@/lib/fraudDetection';
-import { notifyFraudAlert } from '@/lib/notifyFraud';
+import { notifyFraudAlert, notifyRepeatAlert } from '@/lib/notifyFraud';
 
 const FRAUD_ALERT_DEDUP_HOURS = 24;
 
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
       // 세션 리스크 스코어 업데이트
       await updateSessionRisk(session.id, fraudResult.riskScore, fraudResult.reasons);
 
-      // 블랙리스트 추가 (100점 이상)
+      // 블랙리스트 추가 (만점 cap=100)
       if (fraudResult.riskScore >= 100) {
         await addToBlacklist(
           session.fingerprint,
@@ -169,19 +169,21 @@ export async function POST(request: NextRequest) {
           },
           false // 30일 차단
         );
-
-        // SMS 알림 발송 (24h 내 중복 발송 방지)
-        await maybeSendFraudSms({
-          fingerprint: session.fingerprint,
-          ipAddress,
-          siteSlug: body.landingSiteSlug || null,
-          riskScore: fraudResult.riskScore,
-          reasons: fraudResult.reasons,
-          adSource: body.adSource ?? session.utmSource ?? null,
-          adKeyword: body.adKeyword ?? session.utmTerm ?? null,
-          utmCampaign: body.adCampaign ?? session.utmCampaign ?? null,
-        });
       }
+
+      // SMS 알림 — 같은 IP + 같은 fingerprint(디바이스) + 같은 광고 키워드로 24h 내 3회 이상 접속 시 발송
+      // (자체 점수 시스템과 별개. false positive 거의 없는 명확한 룰.)
+      await maybeSendRepeatFraudSms({
+        sessionFingerprint: session.fingerprint,
+        ipAddress,
+        siteSlug: body.landingSiteSlug || null,
+        adKeyword: body.adKeyword ?? session.utmTerm ?? null,
+        adSource: body.adSource ?? session.utmSource ?? null,
+        utmCampaign: body.adCampaign ?? session.utmCampaign ?? null,
+        riskScore: fraudResult.riskScore,
+        reasons: fraudResult.reasons,
+        deviceLabel: `${session.browser || '?'}/${session.os || '?'}`,
+      });
     }
 
     // 클릭 이벤트 기록
@@ -238,9 +240,97 @@ export async function POST(request: NextRequest) {
 }
 
 // ===========================================
-// 부정클릭 SMS 발송 (24h 내 중복 방지)
+// 반복 접속 SMS 발송 (같은 IP + 같은 fingerprint + 같은 키워드 = 24h 내 3회+)
 // ===========================================
 
+interface MaybeSendRepeatFraudSmsArgs {
+  sessionFingerprint: string;
+  ipAddress: string | null;
+  siteSlug: string | null;
+  adKeyword: string | null;
+  adSource: string | null;
+  utmCampaign: string | null;
+  riskScore: number;
+  reasons: string[];
+  deviceLabel: string;
+}
+
+const REPEAT_THRESHOLD = 3;
+const REPEAT_WINDOW_HOURS = 24;
+
+async function maybeSendRepeatFraudSms(args: MaybeSendRepeatFraudSmsArgs) {
+  try {
+    // 키워드 없으면 자연유입 가능성 — SMS 발송 안 함
+    if (!args.adKeyword || !args.ipAddress) return;
+
+    const since = new Date(Date.now() - REPEAT_WINDOW_HOURS * 3600 * 1000);
+
+    // 같은 IP + 같은 fingerprint + 같은 키워드 = 24h 내 모든 ad/cta 클릭 조회
+    const matchingClicks = await prisma.clickEvent.findMany({
+      where: {
+        adKeyword: args.adKeyword,
+        timestamp: { gte: since },
+        eventType: { in: ['ad_click', 'cta_click'] },
+        session: {
+          ipAddress: args.ipAddress,
+          fingerprint: args.sessionFingerprint,
+        },
+      },
+      select: { timestamp: true },
+      orderBy: { timestamp: 'asc' },
+    });
+
+    if (matchingClicks.length < REPEAT_THRESHOLD) return;
+
+    // 24h 중복 발송 방지
+    const recentAlert = await prisma.fraudAlertLog.findFirst({
+      where: {
+        sentAt: { gte: since },
+        OR: [
+          { fingerprint: args.sessionFingerprint },
+          { ipAddress: args.ipAddress },
+        ],
+      },
+      select: { id: true },
+    });
+    if (recentAlert) return;
+
+    // 시간 목록 (한국시간 HH:MM 포맷, 최대 5개)
+    const KST_OFFSET = 9 * 60 * 60 * 1000;
+    const timeList = matchingClicks
+      .slice(-5)
+      .map((c) => {
+        const k = new Date(c.timestamp.getTime() + KST_OFFSET);
+        return `${String(k.getUTCHours()).padStart(2, '0')}:${String(k.getUTCMinutes()).padStart(2, '0')}`;
+      })
+      .join(', ');
+
+    const result = await notifyRepeatAlert({
+      siteSlug: args.siteSlug || 'unknown',
+      ipAddress: args.ipAddress,
+      adKeyword: args.adKeyword,
+      adSource: args.adSource,
+      deviceLabel: args.deviceLabel,
+      clickCount: matchingClicks.length,
+      timeList,
+    });
+
+    await prisma.fraudAlertLog.create({
+      data: {
+        fingerprint: args.sessionFingerprint,
+        ipAddress: args.ipAddress,
+        siteSlug: args.siteSlug || 'unknown',
+        riskScore: args.riskScore,
+        reasons: `반복접속 ${matchingClicks.length}회 (${args.adKeyword})`.slice(0, 500),
+        smsResult: result.success ? 'success' : result.skipped ? 'skipped' : (result.error || 'error').slice(0, 200),
+      },
+    });
+  } catch (e) {
+    console.error('[maybeSendRepeatFraudSms] failed:', e);
+  }
+}
+
+// 레거시 — 점수 기반 발송 (현재 비활성, 미래에 옵션으로 살릴 수 있게 유지)
 interface MaybeSendFraudSmsArgs {
   fingerprint: string;
   ipAddress: string | null;
@@ -252,6 +342,7 @@ interface MaybeSendFraudSmsArgs {
   utmCampaign: string | null;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function maybeSendFraudSms(args: MaybeSendFraudSmsArgs) {
   try {
     const since = new Date(Date.now() - FRAUD_ALERT_DEDUP_HOURS * 3600 * 1000);

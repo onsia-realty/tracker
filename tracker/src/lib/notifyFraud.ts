@@ -40,6 +40,47 @@ export interface FraudAlertResult {
   error?: string
 }
 
+// ===========================================
+// 반복 접속 알림 (3회+ 접속 시)
+// ===========================================
+
+export interface RepeatAlertPayload {
+  siteSlug: string;
+  ipAddress: string;
+  adKeyword: string;
+  adSource?: string | null;
+  deviceLabel: string;     // "Chrome/Windows"
+  clickCount: number;      // 3, 4, 5...
+  timeList: string;        // "11:21, 11:22, 11:27"
+}
+
+export async function notifyRepeatAlert(
+  data: RepeatAlertPayload
+): Promise<FraudAlertResult> {
+  if (!messageService || !sender || !admin) {
+    return { success: false, skipped: true, error: 'Solapi env missing' };
+  }
+
+  const text =
+    `[부정클릭 의심] ${data.siteSlug}\n` +
+    `IP: ${data.ipAddress}\n` +
+    `기기: ${data.deviceLabel}\n` +
+    `키워드: ${data.adKeyword}` +
+    (data.adSource ? ` (${data.adSource})` : '') + `\n` +
+    `${data.clickCount}회 반복 접속\n` +
+    `시각: ${data.timeList}\n` +
+    `→ 네이버 광고 IP 차단 권장`;
+
+  try {
+    await messageService.sendOne({ to: admin, from: sender, text });
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[notifyRepeatAlert] SMS 발송 실패:', msg);
+    return { success: false, error: msg };
+  }
+}
+
 export async function notifyFraudAlert(
   data: FraudAlertPayload
 ): Promise<FraudAlertResult> {
