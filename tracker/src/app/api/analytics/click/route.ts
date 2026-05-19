@@ -14,6 +14,9 @@ import {
   updateSessionRisk,
   addToBlacklist,
 } from '@/lib/fraudDetection';
+import { notifyFraudAlert } from '@/lib/notifyFraud';
+
+const FRAUD_ALERT_DEDUP_HOURS = 24;
 
 // ===========================================
 // CORS 헤더
@@ -166,6 +169,18 @@ export async function POST(request: NextRequest) {
           },
           false // 30일 차단
         );
+
+        // SMS 알림 발송 (24h 내 중복 발송 방지)
+        await maybeSendFraudSms({
+          fingerprint: session.fingerprint,
+          ipAddress,
+          siteSlug: body.landingSiteSlug || null,
+          riskScore: fraudResult.riskScore,
+          reasons: fraudResult.reasons,
+          adSource: body.adSource ?? session.utmSource ?? null,
+          adKeyword: body.adKeyword ?? session.utmTerm ?? null,
+          utmCampaign: body.adCampaign ?? session.utmCampaign ?? null,
+        });
       }
     }
 
@@ -219,5 +234,73 @@ export async function POST(request: NextRequest) {
       { error: 'Internal server error' },
       { status: 500, headers: corsHeaders }
     );
+  }
+}
+
+// ===========================================
+// 부정클릭 SMS 발송 (24h 내 중복 방지)
+// ===========================================
+
+interface MaybeSendFraudSmsArgs {
+  fingerprint: string;
+  ipAddress: string | null;
+  siteSlug: string | null;
+  riskScore: number;
+  reasons: string[];
+  adSource: string | null;
+  adKeyword: string | null;
+  utmCampaign: string | null;
+}
+
+async function maybeSendFraudSms(args: MaybeSendFraudSmsArgs) {
+  try {
+    const since = new Date(Date.now() - FRAUD_ALERT_DEDUP_HOURS * 3600 * 1000);
+
+    // 같은 fingerprint 또는 ipAddress로 24h 내 발송 이력 있으면 skip
+    const recent = await prisma.fraudAlertLog.findFirst({
+      where: {
+        sentAt: { gte: since },
+        OR: [
+          { fingerprint: args.fingerprint },
+          ...(args.ipAddress ? [{ ipAddress: args.ipAddress }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (recent) return;
+
+    // 5분 내 같은 fingerprint 클릭 수
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const clickCount5min = await prisma.clickEvent.count({
+      where: {
+        session: { fingerprint: args.fingerprint },
+        timestamp: { gte: fiveMinAgo },
+      },
+    });
+
+    const result = await notifyFraudAlert({
+      siteSlug: args.siteSlug || 'unknown',
+      ipAddress: args.ipAddress,
+      riskScore: args.riskScore,
+      reasons: args.reasons,
+      adSource: args.adSource,
+      adKeyword: args.adKeyword,
+      utmCampaign: args.utmCampaign,
+      clickCount5min,
+    });
+
+    await prisma.fraudAlertLog.create({
+      data: {
+        fingerprint: args.fingerprint,
+        ipAddress: args.ipAddress,
+        siteSlug: args.siteSlug || 'unknown',
+        riskScore: args.riskScore,
+        reasons: args.reasons.slice(0, 3).join(', ').slice(0, 500),
+        smsResult: result.success ? 'success' : result.skipped ? 'skipped' : (result.error || 'error').slice(0, 200),
+      },
+    });
+  } catch (e) {
+    console.error('[maybeSendFraudSms] failed:', e);
   }
 }

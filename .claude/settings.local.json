@@ -29,7 +29,11 @@
       "Bash(then echo \"DB 파일 존재\")",
       "Bash(sqlite3:*)",
       "Bash(else echo \"DB 파일 없음\")",
-      "Bash(fi)"
+      "Bash(fi)",
+      "Bash(cd \"D:\\\\claude\\\\부정클릭\\\\tracker\" && echo 'your-super-secret-key-change-this-in-production' | npx vercel env add NEXTAUTH_SECRET production 2>&1)",
+      "Bash(cd \"D:\\\\claude\\\\부정클릭\\\\tracker\" && echo 'https://tracker-two-brown.vercel.app' | npx vercel env add NEXTAUTH_URL production 2>&1)",
+      "Bash(cd \"D:\\\\claude\\\\부정클릭\\\\tracker\" && npx vercel --prod 2>&1)",
+      "Bash(cd \"D:/claude/부정클릭/tracker\" && npx vercel --prod 2>&1)"
     ],
     "deny": [],
     "ask": []

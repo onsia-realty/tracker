@@ -23,18 +23,6 @@ export default function AdminLayout({
                   대시보드
                 </Link>
                 <Link
-                  href="/admin/analytics/visitors"
-                  className="px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-                >
-                  방문자
-                </Link>
-                <Link
-                  href="/admin/analytics/fraud"
-                  className="px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-                >
-                  부정클릭
-                </Link>
-                <Link
                   href="/admin/analytics/sites"
                   className="px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
                 >
